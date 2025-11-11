@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/permissions.json",
+  "title": "Tool Permissions Configuration",
+  "description": "Permission rules for controlling tool access",
+  "type": "array",
+  "items": {
+    "$ref": "permission-rule.json#/$defs/rule"
+  },
+  "examples": [
+    [
+      {
+        "tool": "Bash",
+        "matches": { "cmd": "*git commit*" },
+        "action": "ask"
+      },
+      {
+        "tool": "Bash",
+        "matches": { "cmd": ["*python *", "*python3 *"] },
+        "action": "reject"
+      },
+      {
+        "tool": "mcp__playwright_*",
+        "action": "allow"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/messages.json",
+  "title": "Message Types",
+  "description": "Thread message structures",
+  "$defs": {
+    "userState": {
+      "type": "object",
+      "properties": {
+        "currentlyVisibleFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "messageMeta": {
+      "type": "object",
+      "properties": {
+        "sentAt": {
+          "type": "integer",
+          "description": "Unix timestamp in milliseconds"
+        }
+      }
+    },
+    "messageState": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["complete", "incomplete"]
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["end_turn", "tool_use", "max_tokens"]
+        }
+      }
+    },
+    "userMessage": {
+      "type": "object",
+      "required": ["role", "messageId", "content"],
+      "properties": {
+        "role": {
+          "const": "user"
+        },
+        "messageId": {
+          "type": "integer"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "content.json#/$defs/textContent" },
+              { "$ref": "content.json#/$defs/fileContent" },
+              { "$ref": "content.json#/$defs/toolResultContent" }
+            ]
+          }
+        },
+        "userState": {
+          "$ref": "#/$defs/userState"
+        },
+        "agentMode": {
+          "type": "string",
+          "enum": ["smart", "fast"]
+        },
+        "meta": {
+          "$ref": "#/$defs/messageMeta"
+        }
+      }
+    },
+    "assistantMessage": {
+      "type": "object",
+      "required": ["role", "content"],
+      "properties": {
+        "role": {
+          "const": "assistant"
+        },
+        "messageId": {
+          "type": "integer"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "content.json#/$defs/textContent" },
+              { "$ref": "content.json#/$defs/thinkingContent" },
+              { "$ref": "content.json#/$defs/toolUseContent" }
+            ]
+          }
+        },
+        "state": {
+          "$ref": "#/$defs/messageState"
+        },
+        "usage": {
+          "$ref": "usage.json#/$defs/messageUsage"
+        }
+      }
+    },
+    "message": {
+      "oneOf": [
+        { "$ref": "#/$defs/userMessage" },
+        { "$ref": "#/$defs/assistantMessage" }
+      ]
+    }
+  }
+}

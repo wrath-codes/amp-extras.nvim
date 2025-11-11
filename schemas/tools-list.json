@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/tools-list.json",
+  "title": "Tools List",
+  "description": "Output from amp tools list --json",
+  "type": "array",
+  "items": {
+    "$ref": "tool-list-item.json"
+  }
+}

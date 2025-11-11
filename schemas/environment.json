@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/environment.json",
+  "title": "Environment Information",
+  "description": "System and workspace environment data",
+  "$defs": {
+    "workspaceTree": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      }
+    },
+    "platformInfo": {
+      "type": "object",
+      "description": "Platform and client information",
+      "properties": {
+        "os": {
+          "type": "string",
+          "enum": ["darwin", "linux", "win32"]
+        },
+        "osVersion": {
+          "type": "string"
+        },
+        "cpuArchitecture": {
+          "type": "string"
+        },
+        "webBrowser": {
+          "type": "boolean"
+        },
+        "client": {
+          "type": "string"
+        },
+        "clientVersion": {
+          "type": "string"
+        },
+        "clientType": {
+          "type": "string"
+        }
+      }
+    },
+    "initialEnvironment": {
+      "type": "object",
+      "properties": {
+        "trees": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workspaceTree"
+          }
+        },
+        "platform": {
+          "$ref": "#/$defs/platformInfo"
+        }
+      }
+    },
+    "threadEnvironment": {
+      "type": "object",
+      "properties": {
+        "initial": {
+          "$ref": "#/$defs/initialEnvironment"
+        }
+      }
+    }
+  }
+}

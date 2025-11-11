@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/usage.json",
+  "title": "Token and Usage Information",
+  "description": "Token counts and credit tracking",
+  "$defs": {
+    "tokens": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "messageUsage": {
+      "type": "object",
+      "description": "Token usage for a single message",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "maxInputTokens": {
+          "type": "integer"
+        },
+        "inputTokens": {
+          "type": "integer"
+        },
+        "outputTokens": {
+          "type": "integer"
+        },
+        "cacheCreationInputTokens": {
+          "type": "integer"
+        },
+        "cacheReadInputTokens": {
+          "type": "integer"
+        },
+        "totalInputTokens": {
+          "type": "integer"
+        },
+        "credits": {
+          "type": "number"
+        }
+      }
+    },
+    "streamUsage": {
+      "type": "object",
+      "description": "Token usage in stream JSON format",
+      "properties": {
+        "input_tokens": {
+          "type": "integer"
+        },
+        "cache_creation_input_tokens": {
+          "type": "integer"
+        },
+        "cache_read_input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "max_tokens": {
+          "type": "integer"
+        },
+        "service_tier": {
+          "type": "string"
+        }
+      }
+    },
+    "usageLedgerEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "model": {
+          "type": "string"
+        },
+        "credits": {
+          "type": "number"
+        },
+        "tokens": {
+          "$ref": "#/$defs/tokens"
+        },
+        "operationType": {
+          "type": "string"
+        },
+        "fromMessageId": {
+          "type": "integer"
+        },
+        "toMessageId": {
+          "type": "integer"
+        }
+      }
+    },
+    "usageLedger": {
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/usageLedgerEvent"
+          }
+        }
+      }
+    }
+  }
+}

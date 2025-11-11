@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/content.json",
+  "title": "Content Blocks",
+  "description": "Content block types for messages",
+  "$defs": {
+    "textContent": {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": {
+          "const": "text"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "fileContent": {
+      "type": "object",
+      "required": ["type", "fileUri", "text"],
+      "properties": {
+        "type": {
+          "const": "file"
+        },
+        "fileUri": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "thinkingContent": {
+      "type": "object",
+      "required": ["type", "thinking"],
+      "properties": {
+        "type": {
+          "const": "thinking"
+        },
+        "thinking": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      }
+    },
+    "toolUseContent": {
+      "type": "object",
+      "required": ["type", "id", "name", "input"],
+      "properties": {
+        "type": {
+          "const": "tool_use"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object"
+        }
+      }
+    },
+    "toolResultContent": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "const": "tool_result"
+        },
+        "toolUseId": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "isError": {
+          "type": "boolean"
+        }
+      }
+    },
+    "userContent": {
+      "type": "array",
+      "description": "Content blocks in a user message",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/textContent" },
+          { "$ref": "#/$defs/fileContent" },
+          { "$ref": "#/$defs/toolResultContent" }
+        ]
+      }
+    },
+    "assistantContent": {
+      "type": "array",
+      "description": "Content blocks in an assistant message",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/textContent" },
+          { "$ref": "#/$defs/thinkingContent" },
+          { "$ref": "#/$defs/toolUseContent" }
+        ]
+      }
+    },
+    "streamUserContent": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/textContent" },
+          { "$ref": "#/$defs/streamToolResultContent" }
+        ]
+      }
+    },
+    "streamAssistantContent": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/textContent" },
+          { "$ref": "#/$defs/toolUseContent" }
+        ]
+      }
+    },
+    "streamToolResultContent": {
+      "type": "object",
+      "required": ["type", "tool_use_id", "content"],
+      "properties": {
+        "type": {
+          "const": "tool_result"
+        },
+        "tool_use_id": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "is_error": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

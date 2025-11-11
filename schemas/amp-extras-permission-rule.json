@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/amp-extras-permission-rule.json",
+  "title": "amp-extras Permission Rule Extension",
+  "description": "Extended permission rule with amp-extras.nvim plugin metadata",
+  "$defs": {
+    "baseRule": {
+      "allOf": [
+        {
+          "$ref": "permission-rule.json#/$defs/baseRule"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether this rule is active (amp-extras.nvim only, ignored by Amp CLI)"
+            },
+            "note": {
+              "type": "string",
+              "description": "User note about this rule (amp-extras.nvim only, ignored by Amp CLI)"
+            }
+          }
+        }
+      ]
+    },
+    "allowRule": {
+      "allOf": [
+        { "$ref": "permission-rule.json#/$defs/allowRule" },
+        { "$ref": "#/$defs/baseRule" }
+      ]
+    },
+    "rejectRule": {
+      "allOf": [
+        { "$ref": "permission-rule.json#/$defs/rejectRule" },
+        { "$ref": "#/$defs/baseRule" }
+      ]
+    },
+    "askRule": {
+      "allOf": [
+        { "$ref": "permission-rule.json#/$defs/askRule" },
+        { "$ref": "#/$defs/baseRule" }
+      ]
+    },
+    "delegateRule": {
+      "allOf": [
+        { "$ref": "permission-rule.json#/$defs/delegateRule" },
+        { "$ref": "#/$defs/baseRule" }
+      ]
+    },
+    "rule": {
+      "oneOf": [
+        { "$ref": "#/$defs/allowRule" },
+        { "$ref": "#/$defs/rejectRule" },
+        { "$ref": "#/$defs/askRule" },
+        { "$ref": "#/$defs/delegateRule" }
+      ]
+    }
+  }
+}

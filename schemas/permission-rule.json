@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/permission-rule.json",
+  "title": "Permission Rule",
+  "description": "Single permission rule for tool access control",
+  "$defs": {
+    "matchValue": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Glob pattern (*) or regex pattern (/pattern/)"
+        },
+        {
+          "type": "array",
+          "description": "Array of patterns (OR logic)",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": ["boolean", "number", "null"]
+        },
+        {
+          "type": "object",
+          "description": "Nested object matching"
+        }
+      ]
+    },
+    "matchCondition": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/matchValue"
+      },
+      "description": "Map of tool argument names to match values"
+    },
+    "baseRule": {
+      "type": "object",
+      "required": ["tool", "action"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Tool name or glob pattern"
+        },
+        "matches": {
+          "$ref": "#/$defs/matchCondition"
+        },
+        "context": {
+          "type": "string",
+          "enum": ["thread", "subagent"],
+          "description": "Apply rule only to main thread or subagents"
+        }
+      }
+    },
+    "allowRule": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRule" },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "allow"
+            }
+          }
+        }
+      ]
+    },
+    "rejectRule": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRule" },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "reject"
+            }
+          }
+        }
+      ]
+    },
+    "askRule": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRule" },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "ask"
+            }
+          }
+        }
+      ]
+    },
+    "delegateRule": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRule" },
+        {
+          "type": "object",
+          "required": ["to"],
+          "properties": {
+            "action": {
+              "const": "delegate"
+            },
+            "to": {
+              "type": "string",
+              "description": "Program name or path to delegate to (must be on $PATH)"
+            }
+          }
+        }
+      ]
+    },
+    "rule": {
+      "oneOf": [
+        { "$ref": "#/$defs/allowRule" },
+        { "$ref": "#/$defs/rejectRule" },
+        { "$ref": "#/$defs/askRule" },
+        { "$ref": "#/$defs/delegateRule" }
+      ]
+    }
+  }
+}

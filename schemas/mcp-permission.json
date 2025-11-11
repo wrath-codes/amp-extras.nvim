@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/mcp-permission.json",
+  "title": "MCP Permission Rule",
+  "description": "Single MCP server permission rule",
+  "$defs": {
+    "localServerMatch": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Executable command name or glob pattern"
+        },
+        "args": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Arguments glob pattern"
+            },
+            {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "remoteServerMatch": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Server endpoint URL or glob pattern"
+        }
+      },
+      "additionalProperties": false
+    },
+    "baseRule": {
+      "type": "object",
+      "required": ["matches", "action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["allow", "reject"],
+          "description": "Whether to allow or block the MCP server"
+        }
+      }
+    },
+    "localRule": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRule" },
+        {
+          "type": "object",
+          "properties": {
+            "matches": {
+              "$ref": "#/$defs/localServerMatch"
+            }
+          }
+        }
+      ]
+    },
+    "remoteRule": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRule" },
+        {
+          "type": "object",
+          "properties": {
+            "matches": {
+              "$ref": "#/$defs/remoteServerMatch"
+            }
+          }
+        }
+      ]
+    },
+    "rule": {
+      "oneOf": [
+        { "$ref": "#/$defs/localRule" },
+        { "$ref": "#/$defs/remoteRule" }
+      ]
+    }
+  }
+}

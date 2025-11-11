@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/config.json",
+  "title": "Amp CLI Configuration",
+  "description": "Settings for Amp CLI and editor extensions",
+  "type": "object",
+  "properties": {
+    "amp.anthropic.thinking.enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable Claude's extended thinking capabilities"
+    },
+    "amp.experimental.planMode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable plan mode for collaborative planning. Agent can research but cannot edit files or run commands"
+    },
+    "amp.permissions": {
+      "$ref": "permissions.json",
+      "description": "Tool access control rules"
+    },
+    "amp.git.commit.ampThread.enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Add Amp-Thread trailer in git commits"
+    },
+    "amp.git.commit.coauthor.enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Add Amp as co-author in git commits"
+    },
+    "amp.mcpServers": {
+      "$ref": "mcp-servers.json",
+      "description": "Model Context Protocol servers configuration"
+    },
+    "amp.mcpPermissions": {
+      "$ref": "mcp-permissions.json",
+      "description": "MCP server access control rules"
+    },
+    "amp.terminal.commands.nodeSpawn.loadProfile": {
+      "type": "string",
+      "enum": ["always", "never", "daily"],
+      "default": "always",
+      "description": "Load environment profile before running commands"
+    },
+    "amp.todos.enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable TODOs tracking for managing tasks"
+    },
+    "amp.tools.disable": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Disable specific tools by name. Use 'builtin:toolname' for builtin tools only. Glob patterns supported"
+    },
+    "amp.tools.stopTimeout": {
+      "type": "number",
+      "default": 300,
+      "minimum": 0,
+      "description": "Seconds to wait before canceling a running tool"
+    },
+    "amp.updates.mode": {
+      "type": "string",
+      "enum": ["warn", "disabled", "auto"],
+      "default": "auto",
+      "description": "CLI-only: Control update checking behavior"
+    },
+    "amp.admin.compatibilityDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Enterprise-only: Settings compatibility date (YYYY-MM-DD)"
+    }
+  },
+  "additionalProperties": false
+}

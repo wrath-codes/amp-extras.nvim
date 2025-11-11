@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/thread.json",
+  "title": "Amp Thread",
+  "description": "Thread file format stored at ~/.local/share/amp/threads",
+  "type": "object",
+  "required": ["v", "id", "created", "messages", "nextMessageId", "agentMode"],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "description": "Schema version number"
+    },
+    "id": {
+      "$ref": "common.json#/$defs/threadId"
+    },
+    "created": {
+      "$ref": "common.json#/$defs/timestamp"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "messages.json#/$defs/message"
+      }
+    },
+    "nextMessageId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "agentMode": {
+      "$ref": "common.json#/$defs/agentMode"
+    },
+    "title": {
+      "type": "string",
+      "description": "User-defined or auto-generated thread title"
+    },
+    "env": {
+      "$ref": "environment.json#/$defs/threadEnvironment"
+    },
+    "usageLedger": {
+      "$ref": "usage.json#/$defs/usageLedger"
+    }
+  }
+}

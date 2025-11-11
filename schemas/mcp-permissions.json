@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/mcp-permissions.json",
+  "title": "MCP Permissions Configuration",
+  "description": "Permission rules for controlling MCP server access",
+  "type": "array",
+  "items": {
+    "$ref": "mcp-permission.json#/$defs/rule"
+  },
+  "examples": [
+    [
+      {
+        "matches": { "command": "npx", "args": "* @playwright/mcp@*" },
+        "action": "allow"
+      },
+      {
+        "matches": { "url": "https://mcp.trusted.com/mcp" },
+        "action": "allow"
+      },
+      {
+        "matches": { "command": "python", "args": "*bad_command*" },
+        "action": "reject"
+      },
+      {
+        "matches": { "url": "*/malicious.com*" },
+        "action": "reject"
+      }
+    ]
+  ]
+}

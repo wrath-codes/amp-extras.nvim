@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/mcp-server.json",
+  "title": "MCP Server Configuration",
+  "description": "Individual MCP server configuration",
+  "$defs": {
+    "localServer": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Executable command"
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Command arguments"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Environment variables to set"
+        }
+      },
+      "additionalProperties": false
+    },
+    "remoteServer": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Server endpoint URL"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "HTTP headers (supports ${VAR_NAME} environment variables)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "server": {
+      "oneOf": [
+        { "$ref": "#/$defs/localServer" },
+        { "$ref": "#/$defs/remoteServer" }
+      ]
+    }
+  }
+}

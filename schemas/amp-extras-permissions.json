@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/amp-extras-permissions.json",
+  "title": "amp-extras Permissions Configuration",
+  "description": "Permission rules with amp-extras.nvim plugin metadata",
+  "type": "array",
+  "items": {
+    "$ref": "amp-extras-permission-rule.json#/$defs/rule"
+  },
+  "examples": [
+    [
+      {
+        "tool": "Bash",
+        "matches": { "cmd": "*git commit*" },
+        "action": "ask",
+        "enabled": true,
+        "note": "Always review git commits"
+      },
+      {
+        "tool": "Bash",
+        "matches": { "cmd": ["*rm -rf*", "*rm -fr*"] },
+        "action": "reject",
+        "enabled": true,
+        "note": "Dangerous recursive deletion"
+      },
+      {
+        "tool": "edit_file",
+        "action": "allow",
+        "enabled": false,
+        "note": "Temporarily disabled for testing"
+      }
+    ]
+  ]
+}

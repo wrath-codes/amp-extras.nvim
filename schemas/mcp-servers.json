@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/mcp-servers.json",
+  "title": "MCP Servers Configuration",
+  "description": "Model Context Protocol servers that expose tools",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "mcp-server.json#/$defs/server"
+  },
+  "examples": [
+    {
+      "playwright": {
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@latest", "--headless", "--isolated"]
+      },
+      "semgrep": {
+        "url": "https://mcp.semgrep.ai/mcp"
+      },
+      "sourcegraph": {
+        "url": "${SRC_ENDPOINT}/.api/mcp/v1",
+        "headers": {
+          "Authorization": "token ${SRC_ACCESS_TOKEN}"
+        }
+      }
+    }
+  ]
+}

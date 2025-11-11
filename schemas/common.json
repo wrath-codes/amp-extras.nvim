@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/common.json",
+  "title": "Common Types",
+  "description": "Shared type definitions used across Amp schemas",
+  "$defs": {
+    "threadId": {
+      "type": "string",
+      "pattern": "^T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Unique thread identifier"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Unique session/thread identifier"
+    },
+    "messageId": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unique message index within a thread"
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Unix timestamp in milliseconds"
+    },
+    "toolUseId": {
+      "type": "string",
+      "description": "Unique identifier for a tool invocation"
+    },
+    "agentMode": {
+      "type": "string",
+      "enum": ["smart", "fast"],
+      "description": "Agent execution mode"
+    },
+    "role": {
+      "type": "string",
+      "enum": ["user", "assistant"],
+      "description": "Message author role"
+    }
+  }
+}

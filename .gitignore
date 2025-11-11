@@ -19,3 +19,19 @@ target
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Apm
+*AGENTS.md
+ARCHITECTURE.md
+SUMMARY.md
+ASYNC_ARCHITECTURE.md
+CONFIGURATION.md
+DECISIONS.md
+ROADMAP.md
+THREAD_STORAGE.md
+FILE_STRUCTURE.md
+.beads
+.amp
+amp
+
+

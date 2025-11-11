@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://ampcode.com/schemas/tool-list-item.json",
+  "title": "Tool List Item",
+  "description": "Individual tool item from amp tools list --json",
+  "type": "object",
+  "required": ["name", "source", "description"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the tool"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["built-in", "mcp", "local-mcp", "toolbox"],
+      "description": "Source of the tool"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of the tool"
+    }
+  }
+}
