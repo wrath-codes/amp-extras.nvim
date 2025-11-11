@@ -47,6 +47,14 @@ pub enum AmpError {
     #[error("Validation error: {0}")]
     ValidationError(String),
 
+    /// WebSocket error
+    #[error("WebSocket error: {0}")]
+    WebSocketError(String),
+
+    /// URL parsing error
+    #[error("URL parsing error: {0}")]
+    UrlParseError(String),
+
     /// Generic error (catch-all)
     #[error("{0}")]
     Other(String),
@@ -67,6 +75,18 @@ impl From<String> for AmpError {
 impl From<&str> for AmpError {
     fn from(err: &str) -> Self {
         AmpError::Other(err.to_string())
+    }
+}
+
+impl From<tungstenite::Error> for AmpError {
+    fn from(err: tungstenite::Error) -> Self {
+        AmpError::WebSocketError(err.to_string())
+    }
+}
+
+impl From<url::ParseError> for AmpError {
+    fn from(err: url::ParseError) -> Self {
+        AmpError::UrlParseError(err.to_string())
     }
 }
 
@@ -103,7 +123,35 @@ impl AmpError {
             AmpError::ThreadParseError(_) => "thread_parse",
             AmpError::ConfigError(_) => "config",
             AmpError::ValidationError(_) => "validation",
+            AmpError::WebSocketError(_) => "websocket",
+            AmpError::UrlParseError(_) => "url_parse",
             AmpError::Other(_) => "other",
+        }
+    }
+
+    /// Convert AmpError to JSON-RPC error code
+    ///
+    /// Maps internal errors to standard JSON-RPC 2.0 error codes:
+    /// - -32700: Parse error (invalid JSON)
+    /// - -32600: Invalid request
+    /// - -32601: Method not found
+    /// - -32602: Invalid params
+    /// - -32603: Internal error
+    /// - -32000 to -32099: Server errors (custom)
+    pub fn to_jsonrpc_code(&self) -> i32 {
+        match self {
+            AmpError::SerdeError(_) => -32700, // Parse error
+            AmpError::InvalidArgs { .. } => -32602, // Invalid params
+            AmpError::CommandNotFound(_) => -32601, // Method not found
+            AmpError::ValidationError(_) => -32600, // Invalid request
+            AmpError::WebSocketError(_) => -32001, // Server error (WebSocket)
+            AmpError::UrlParseError(_) => -32600, // Invalid request
+            AmpError::DatabaseError(_) => -32002, // Server error (Database)
+            AmpError::IoError(_) => -32003, // Server error (I/O)
+            AmpError::AmpCliError(_) => -32004, // Server error (CLI)
+            AmpError::ThreadParseError(_) => -32700, // Parse error
+            AmpError::ConfigError(_) => -32005, // Server error (Config)
+            AmpError::Other(_) => -32603, // Internal error
         }
     }
 }
@@ -145,5 +193,97 @@ mod tests {
     fn test_from_string() {
         let err: AmpError = "test error".into();
         assert_eq!(err.to_string(), "test error");
+    }
+
+    #[test]
+    fn test_websocket_error_category() {
+        let err = AmpError::WebSocketError("connection failed".to_string());
+        assert_eq!(err.category(), "websocket");
+    }
+
+    #[test]
+    fn test_url_parse_error_category() {
+        let err = AmpError::UrlParseError("invalid url".to_string());
+        assert_eq!(err.category(), "url_parse");
+    }
+
+    #[test]
+    fn test_from_tungstenite_error() {
+        // Create a tungstenite error by trying to parse invalid data
+        let ws_err = tungstenite::Error::Protocol(
+            tungstenite::error::ProtocolError::ResetWithoutClosingHandshake
+        );
+        let amp_err: AmpError = ws_err.into();
+        
+        match amp_err {
+            AmpError::WebSocketError(_) => {
+                assert_eq!(amp_err.category(), "websocket");
+            }
+            _ => panic!("Expected WebSocketError"),
+        }
+    }
+
+    #[test]
+    fn test_from_url_parse_error() {
+        let url_err = url::Url::parse("not a valid url").unwrap_err();
+        let amp_err: AmpError = url_err.into();
+        
+        match amp_err {
+            AmpError::UrlParseError(_) => {
+                assert_eq!(amp_err.category(), "url_parse");
+            }
+            _ => panic!("Expected UrlParseError"),
+        }
+    }
+
+    #[test]
+    fn test_jsonrpc_error_codes() {
+        // Standard JSON-RPC error codes
+        assert_eq!(
+            AmpError::SerdeError(serde_json::from_str::<i32>("invalid").unwrap_err()).to_jsonrpc_code(),
+            -32700 // Parse error
+        );
+        assert_eq!(
+            AmpError::CommandNotFound("test".to_string()).to_jsonrpc_code(),
+            -32601 // Method not found
+        );
+        assert_eq!(
+            AmpError::InvalidArgs {
+                command: "test".to_string(),
+                reason: "bad".to_string()
+            }
+            .to_jsonrpc_code(),
+            -32602 // Invalid params
+        );
+        assert_eq!(
+            AmpError::ValidationError("invalid".to_string()).to_jsonrpc_code(),
+            -32600 // Invalid request
+        );
+
+        // Custom server error codes
+        assert_eq!(
+            AmpError::WebSocketError("error".to_string()).to_jsonrpc_code(),
+            -32001
+        );
+        assert_eq!(
+            AmpError::DatabaseError(rusqlite::Error::InvalidQuery).to_jsonrpc_code(),
+            -32002
+        );
+        assert_eq!(
+            AmpError::IoError(std::io::Error::new(std::io::ErrorKind::NotFound, "test")).to_jsonrpc_code(),
+            -32003
+        );
+        assert_eq!(
+            AmpError::AmpCliError("error".to_string()).to_jsonrpc_code(),
+            -32004
+        );
+        assert_eq!(
+            AmpError::ConfigError("error".to_string()).to_jsonrpc_code(),
+            -32005
+        );
+        assert_eq!(
+            AmpError::Other("error".to_string()).to_jsonrpc_code(),
+            -32603 // Internal error
+        );
     }
 }

@@ -12,6 +12,7 @@ use serde_json::Value;
 
 use crate::commands;
 use crate::errors::{AmpError, Result};
+use crate::server;
 
 /// Main FFI entry point for command execution
 ///
@@ -54,6 +55,202 @@ pub fn autocomplete(kind: String, prefix: String) -> nvim_oxi::Result<Vec<String
         }
     }
 }
+
+// ============================================================================
+// WebSocket Server FFI
+// ============================================================================
+
+/// Start the WebSocket server
+///
+/// Called from Lua as: `ffi.server_start()`
+///
+/// Returns:
+/// ```lua
+/// {
+///   success = true,
+///   port = 12345,
+///   token = "abc123...",
+///   lockfile = "/path/to/lockfile.json"
+/// }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description",
+///   category = "error_type"
+/// }
+/// ```
+pub fn server_start() -> nvim_oxi::Result<Object> {
+    match server::start() {
+        Ok((port, token, lockfile_path)) => {
+            let result = Dictionary::from_iter([
+                ("success", Object::from(true)),
+                ("port", Object::from(port as i32)),
+                ("token", Object::from(token)),
+                ("lockfile", Object::from(lockfile_path.to_string_lossy().to_string())),
+            ]);
+            Ok(Object::from(result))
+        }
+        Err(err) => Ok(create_error_object(&err)),
+    }
+}
+
+/// Stop the WebSocket server
+///
+/// Called from Lua as: `ffi.server_stop()`
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+pub fn server_stop() -> nvim_oxi::Result<Object> {
+    server::stop();
+    
+    let result = Dictionary::from_iter([
+        ("success", Object::from(true)),
+    ]);
+    Ok(Object::from(result))
+}
+
+/// Check if WebSocket server is running
+///
+/// Called from Lua as: `ffi.server_is_running()`
+///
+/// Returns:
+/// ```lua
+/// { running = true }
+/// ```
+pub fn server_is_running() -> nvim_oxi::Result<Object> {
+    let result = Dictionary::from_iter([
+        ("running", Object::from(server::is_running())),
+    ]);
+    Ok(Object::from(result))
+}
+
+/// Setup notification autocommands
+///
+/// Called from Lua as: `ffi.setup_notifications()`
+///
+/// Sets up autocommands that trigger WebSocket notifications:
+/// - CursorMoved/CursorMovedI → selectionDidChange
+/// - BufEnter/WinEnter → visibleFilesDidChange
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description",
+///   category = "error_type"
+/// }
+/// ```
+pub fn setup_notifications() -> nvim_oxi::Result<Object> {
+    // Get the Hub from the server (if running)
+    match server::get_hub() {
+        Some(hub) => {
+            match crate::autocmds::setup_notifications(hub) {
+                Ok(()) => {
+                    let result = Dictionary::from_iter([
+                        ("success", Object::from(true)),
+                    ]);
+                    Ok(Object::from(result))
+                }
+                Err(err) => Ok(create_error_object(&err)),
+            }
+        }
+        None => {
+            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
+            Ok(create_error_object(&err))
+        }
+    }
+}
+
+/// Send selectionDidChange notification manually
+///
+/// Called from Lua as: `ffi.send_selection_changed(uri, start_line, start_char, end_line, end_char, content)`
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description"
+/// }
+/// ```
+pub fn send_selection_changed(
+    uri: String,
+    start_line: i64,
+    start_char: i64,
+    end_line: i64,
+    end_char: i64,
+    content: String,
+) -> nvim_oxi::Result<Object> {
+    match server::get_hub() {
+        Some(hub) => {
+            crate::notifications::send_selection_changed(
+                &hub,
+                &uri,
+                start_line as usize,
+                start_char as usize,
+                end_line as usize,
+                end_char as usize,
+                &content,
+            );
+            
+            let result = Dictionary::from_iter([
+                ("success", Object::from(true)),
+            ]);
+            Ok(Object::from(result))
+        }
+        None => {
+            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
+            Ok(create_error_object(&err))
+        }
+    }
+}
+
+/// Send visibleFilesDidChange notification manually
+///
+/// Called from Lua as: `ffi.send_visible_files_changed(uris)`
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description"
+/// }
+/// ```
+pub fn send_visible_files_changed(uris: Vec<String>) -> nvim_oxi::Result<Object> {
+    match server::get_hub() {
+        Some(hub) => {
+            crate::notifications::send_visible_files_changed(&hub, uris);
+            
+            let result = Dictionary::from_iter([
+                ("success", Object::from(true)),
+            ]);
+            Ok(Object::from(result))
+        }
+        None => {
+            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
+            Ok(create_error_object(&err))
+        }
+    }
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
 
 /// Internal command dispatcher
 ///
