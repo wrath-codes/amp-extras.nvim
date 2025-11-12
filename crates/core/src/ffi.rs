@@ -253,6 +253,82 @@ pub fn send_visible_files_changed(uris: Vec<String>) -> nvim_oxi::Result<Object>
     }
 }
 
+/// Send userSentMessage notification
+///
+/// Called from Lua as: `ffi.send_user_message(message)`
+///
+/// Sends user-typed message directly to the agent.
+/// This immediately submits the message to Amp CLI.
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description"
+/// }
+/// ```
+pub fn send_user_message(message: String) -> nvim_oxi::Result<Object> {
+    match server::get_hub() {
+        Some(hub) => {
+            match crate::notifications::send_user_sent_message(&hub, &message) {
+                Ok(()) => {
+                    let result = Dictionary::from_iter([
+                        ("success", Object::from(true)),
+                    ]);
+                    Ok(Object::from(result))
+                }
+                Err(err) => Ok(create_error_object(&err)),
+            }
+        }
+        None => {
+            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
+            Ok(create_error_object(&err))
+        }
+    }
+}
+
+/// Send appendToPrompt notification
+///
+/// Called from Lua as: `ffi.send_to_prompt(message)`
+///
+/// Appends text to the IDE prompt field without sending.
+/// Allows user to edit before submitting.
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description"
+/// }
+/// ```
+pub fn send_to_prompt(message: String) -> nvim_oxi::Result<Object> {
+    match server::get_hub() {
+        Some(hub) => {
+            match crate::notifications::send_append_to_prompt(&hub, &message) {
+                Ok(()) => {
+                    let result = Dictionary::from_iter([
+                        ("success", Object::from(true)),
+                    ]);
+                    Ok(Object::from(result))
+                }
+                Err(err) => Ok(create_error_object(&err)),
+            }
+        }
+        None => {
+            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
+            Ok(create_error_object(&err))
+        }
+    }
+}
+
 // ============================================================================
 // Internal Helpers
 // ============================================================================

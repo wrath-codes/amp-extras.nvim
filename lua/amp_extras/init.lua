@@ -6,7 +6,17 @@ local M = {}
 -- Load the Rust FFI library
 -- Build output: target/*/libamp_extras_core.{dylib,so,dll}
 -- Copied by build.rs to: lua/amp_extras/amp_extras_core.so (debug builds)
--- Copied by justfile to: lua/amp_extras/amp_extras.so (release builds via `just build`)
+-- Copied by justfile to: lua/amp_extras/amp_extras_core.so (release builds via `just build`)
+
+-- Determine the directory where this module resides
+local source = debug.getinfo(1, "S").source
+local module_dir = source:match("@(.*/)")  -- Extract directory from "@/path/to/init.lua"
+
+-- Add module directory to package.cpath so it can find amp_extras_core.so
+if module_dir then
+  package.cpath = module_dir .. "?.so;" .. package.cpath
+end
+
 local ffi = require("amp_extras_core")
 
 -- ============================================================================
@@ -102,6 +112,47 @@ end
 ---@return table result
 function M.send_visible_files_changed(uris)
   return ffi.send_visible_files_changed(uris)
+end
+
+-- ============================================================================
+-- User Message Interface
+-- ============================================================================
+
+--- Send user message to agent
+---
+--- Sends a message directly to the Amp agent (immediately submits).
+--- Requires WebSocket server to be running.
+---
+---@param message string Message text to send to agent
+---@return table|nil result Success status or nil on error
+---@return string|nil error Error message if failed
+function M.send_user_message(message)
+  local result = ffi.send_user_message(message)
+  
+  if result.error then
+    return nil, result.message
+  end
+  
+  return result
+end
+
+--- Append text to IDE prompt field
+---
+--- Appends text to Amp IDE's prompt field without sending.
+--- Allows user to edit before submitting.
+--- Requires WebSocket server to be running.
+---
+---@param message string Text to append to prompt field
+---@return table|nil result Success status or nil on error
+---@return string|nil error Error message if failed
+function M.send_to_prompt(message)
+  local result = ffi.send_to_prompt(message)
+  
+  if result.error then
+    return nil, result.message
+  end
+  
+  return result
 end
 
 return M

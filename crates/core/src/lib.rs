@@ -41,6 +41,14 @@ fn send_visible_files_changed_wrapper(uris: Vec<String>) -> Object {
     ffi::send_visible_files_changed(uris).unwrap()
 }
 
+fn send_user_message_wrapper(message: String) -> Object {
+    ffi::send_user_message(message).unwrap()
+}
+
+fn send_to_prompt_wrapper(message: String) -> Object {
+    ffi::send_to_prompt(message).unwrap()
+}
+
 /// Plugin entry point - called when Neovim loads the plugin
 ///
 /// This function is invoked by nvim-oxi and registers all FFI exports
@@ -60,6 +68,8 @@ fn amp_extras_core() -> nvim_oxi::Result<Dictionary> {
     exports.insert("setup_notifications", Function::<(), Object>::from_fn(|()| ffi::setup_notifications()));
     exports.insert("send_selection_changed", Function::<(String, i64, i64, i64, i64, String), Object>::from_fn(send_selection_changed_wrapper));
     exports.insert("send_visible_files_changed", Function::<Vec<String>, Object>::from_fn(send_visible_files_changed_wrapper));
+    exports.insert("send_user_message", Function::<String, Object>::from_fn(send_user_message_wrapper));
+    exports.insert("send_to_prompt", Function::<String, Object>::from_fn(send_to_prompt_wrapper));
 
     Ok(exports)
 }

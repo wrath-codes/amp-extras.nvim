@@ -7,21 +7,21 @@ export PATH := env_var('HOME') + "/.cargo/bin:" + env_var('PATH')
 default:
     @just --list
 
-# Build the Rust library and copy to lua/
+# Build the Rust library and copy to lua/amp_extras/
 build:
     @echo "Building amp-extras-rs..."
     cargo build --release
-    @echo "Copying library to lua/..."
-    @mkdir -p lua
+    @echo "Copying library to lua/amp_extras/..."
+    @mkdir -p lua/amp_extras
     @if [ -f target/release/libamp_extras_core.dylib ]; then \
-        cp target/release/libamp_extras_core.dylib lua/amp_extras_core.so; \
-        echo "✓ Copied libamp_extras_core.dylib -> lua/amp_extras_core.so"; \
+        cp target/release/libamp_extras_core.dylib lua/amp_extras/amp_extras_core.so; \
+        echo "✓ Copied libamp_extras_core.dylib -> lua/amp_extras/amp_extras_core.so"; \
     elif [ -f target/release/libamp_extras_core.so ]; then \
-        cp target/release/libamp_extras_core.so lua/amp_extras_core.so; \
-        echo "✓ Copied libamp_extras_core.so -> lua/amp_extras_core.so"; \
+        cp target/release/libamp_extras_core.so lua/amp_extras/amp_extras_core.so; \
+        echo "✓ Copied libamp_extras_core.so -> lua/amp_extras/amp_extras_core.so"; \
     elif [ -f target/release/amp_extras_core.dll ]; then \
-        cp target/release/amp_extras_core.dll lua/amp_extras_core.so; \
-        echo "✓ Copied amp_extras_core.dll -> lua/amp_extras_core.so"; \
+        cp target/release/amp_extras_core.dll lua/amp_extras/amp_extras_core.so; \
+        echo "✓ Copied amp_extras_core.dll -> lua/amp_extras/amp_extras_core.so"; \
     else \
         echo "✗ No library found in target/release/"; \
         exit 1; \
@@ -32,14 +32,20 @@ build:
 build-debug:
     @echo "Building amp-extras-rs (debug mode)..."
     cargo build
-    @echo "Copying library to lua/..."
-    @mkdir -p lua
+    @echo "Copying library to lua/amp_extras/..."
+    @mkdir -p lua/amp_extras
     @if [ -f target/debug/libamp_extras_core.dylib ]; then \
-        cp target/debug/libamp_extras_core.dylib lua/amp_extras_core.so; \
+        cp target/debug/libamp_extras_core.dylib lua/amp_extras/amp_extras_core.so; \
+        echo "✓ Copied libamp_extras_core.dylib -> lua/amp_extras/amp_extras_core.so"; \
     elif [ -f target/debug/libamp_extras_core.so ]; then \
-        cp target/debug/libamp_extras_core.so lua/amp_extras_core.so; \
+        cp target/debug/libamp_extras_core.so lua/amp_extras/amp_extras_core.so; \
+        echo "✓ Copied libamp_extras_core.so -> lua/amp_extras/amp_extras_core.so"; \
     elif [ -f target/debug/amp_extras_core.dll ]; then \
-        cp target/debug/amp_extras_core.dll lua/amp_extras_core.so; \
+        cp target/debug/amp_extras_core.dll lua/amp_extras/amp_extras_core.so; \
+        echo "✓ Copied amp_extras_core.dll -> lua/amp_extras/amp_extras_core.so"; \
+    else \
+        echo "✗ No library found in target/debug/"; \
+        exit 1; \
     fi
     @echo "✓ Debug build complete!"
 
@@ -144,6 +150,7 @@ install: build
 clean:
     @echo "Cleaning build artifacts..."
     cargo clean
+    rm -f lua/amp_extras/amp_extras_core.so
     rm -f lua/amp_extras_core.so
     @echo "✓ Clean complete!"
 
