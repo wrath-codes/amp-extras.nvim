@@ -11,17 +11,17 @@ default:
 build:
     @echo "Building amp-extras-rs..."
     cargo build --release
-    @echo "Copying library to lua/amp_extras/..."
-    @mkdir -p lua/amp_extras
+    @echo "Copying library to lua/..."
+    @mkdir -p lua
     @if [ -f target/release/libamp_extras_core.dylib ]; then \
-        cp target/release/libamp_extras_core.dylib lua/amp_extras/amp_extras_core.so; \
-        echo "✓ Copied libamp_extras_core.dylib -> lua/amp_extras/amp_extras_core.so"; \
+        cp target/release/libamp_extras_core.dylib lua/amp_extras_core.so; \
+        echo "✓ Copied libamp_extras_core.dylib -> lua/amp_extras_core.so"; \
     elif [ -f target/release/libamp_extras_core.so ]; then \
-        cp target/release/libamp_extras_core.so lua/amp_extras/amp_extras_core.so; \
-        echo "✓ Copied libamp_extras_core.so -> lua/amp_extras/amp_extras_core.so"; \
+        cp target/release/libamp_extras_core.so lua/amp_extras_core.so; \
+        echo "✓ Copied libamp_extras_core.so -> lua/amp_extras_core.so"; \
     elif [ -f target/release/amp_extras_core.dll ]; then \
-        cp target/release/amp_extras_core.dll lua/amp_extras/amp_extras_core.so; \
-        echo "✓ Copied amp_extras_core.dll -> lua/amp_extras/amp_extras_core.so"; \
+        cp target/release/amp_extras_core.dll lua/amp_extras_core.so; \
+        echo "✓ Copied amp_extras_core.dll -> lua/amp_extras_core.so"; \
     else \
         echo "✗ No library found in target/release/"; \
         exit 1; \
@@ -32,14 +32,14 @@ build:
 build-debug:
     @echo "Building amp-extras-rs (debug mode)..."
     cargo build
-    @echo "Copying library to lua/amp_extras/..."
-    @mkdir -p lua/amp_extras
+    @echo "Copying library to lua/..."
+    @mkdir -p lua
     @if [ -f target/debug/libamp_extras_core.dylib ]; then \
-        cp target/debug/libamp_extras_core.dylib lua/amp_extras/amp_extras_core.so; \
+        cp target/debug/libamp_extras_core.dylib lua/amp_extras_core.so; \
     elif [ -f target/debug/libamp_extras_core.so ]; then \
-        cp target/debug/libamp_extras_core.so lua/amp_extras/amp_extras_core.so; \
+        cp target/debug/libamp_extras_core.so lua/amp_extras_core.so; \
     elif [ -f target/debug/amp_extras_core.dll ]; then \
-        cp target/debug/amp_extras_core.dll lua/amp_extras/amp_extras_core.so; \
+        cp target/debug/amp_extras_core.dll lua/amp_extras_core.so; \
     fi
     @echo "✓ Debug build complete!"
 
@@ -52,6 +52,58 @@ test:
 # Run tests with output
 test-verbose:
     cargo test --workspace -- --nocapture
+
+# Run integration tests with Neovim headless
+test-integration: build-debug
+    @echo "Running integration tests (Neovim headless)..."
+    @if command -v nvim >/dev/null 2>&1; then \
+        nvim --headless -u tests/server_test.lua || true; \
+        echo "✓ Integration tests complete!"; \
+    else \
+        echo "✗ nvim not found"; \
+        echo "  Install Neovim to run integration tests"; \
+        exit 1; \
+    fi
+
+# Run notification integration tests
+test-notifications: build-debug
+    @echo "Running notification integration tests (Neovim headless)..."
+    @if command -v nvim >/dev/null 2>&1; then \
+        nvim --headless -u tests/notification_test.lua || true; \
+        echo "✓ Notification tests complete!"; \
+    else \
+        echo "✗ nvim not found"; \
+        echo "  Install Neovim to run integration tests"; \
+        exit 1; \
+    fi
+
+# Run visual selection notification tests
+test-visual: build-debug
+    @echo "Running visual selection tests (Neovim headless)..."
+    @if command -v nvim >/dev/null 2>&1; then \
+        nvim --headless -u tests/visual_selection_test.lua || true; \
+        echo "✓ Visual selection tests complete!"; \
+    else \
+        echo "✗ nvim not found"; \
+        echo "  Install Neovim to run integration tests"; \
+        exit 1; \
+    fi
+
+# Start WebSocket server for manual testing
+test-ws-server: build-debug
+    @echo "Starting WebSocket test server..."
+    @echo "This will start Neovim with the server running."
+    @echo "In another terminal, use the displayed command to connect a client."
+    @echo ""
+    @nvim -u tests/automated_websocket_test.lua
+
+# Run full integration test suite
+test-integration-full: build-debug
+    @./tests/run_integration_tests.sh
+
+# Run all tests (Rust + integration)
+test-all: test test-integration
+    @echo "✓ All tests passed!"
 
 # Format all code (Rust + Lua)
 fmt:
@@ -92,7 +144,7 @@ install: build
 clean:
     @echo "Cleaning build artifacts..."
     cargo clean
-    rm -f lua/amp_extras/amp_extras_core.so
+    rm -f lua/amp_extras_core.so
     @echo "✓ Clean complete!"
 
 # Check for common issues

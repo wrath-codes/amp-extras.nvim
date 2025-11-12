@@ -41,6 +41,14 @@ dirs.workspace = true
 crossbeam.workspace = true
 walkdir.workspace = true
 
+# WebSocket server
+tungstenite.workspace = true
+url.workspace = true
+rand.workspace = true
+crossbeam-channel.workspace = true
+subtle.workspace = true
+http.workspace = true
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.5"
