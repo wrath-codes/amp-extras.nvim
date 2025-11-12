@@ -49,15 +49,5 @@ pub(crate) fn get_position_as_range() -> Result<(usize, usize, usize, usize, Str
     Ok((line, col, line, col, String::new()))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_position_as_range_returns_zero_width() {
-        // This test requires Neovim context, so we just verify the structure
-        // In actual Neovim, get_position() would return valid coordinates
-        // The function should return (line, col, line, col, "")
-        // We'll test this in integration tests
-    }
-}
+// Tests for this module are in tests-integration/src/
+// since they require a running Neovim instance

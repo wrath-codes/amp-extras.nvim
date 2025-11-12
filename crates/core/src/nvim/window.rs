@@ -49,15 +49,5 @@ pub(crate) fn get_visible_buffers() -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_visible_buffers_returns_empty_without_nvim() {
-        // In test environment without Neovim, list_wins returns empty
-        let result = get_visible_buffers();
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Vec::<PathBuf>::new());
-    }
-}
+// Tests for this module are in tests-integration/src/
+// since they require a running Neovim instance

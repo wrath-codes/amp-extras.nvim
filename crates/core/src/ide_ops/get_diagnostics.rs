@@ -58,7 +58,6 @@ pub fn get_diagnostics(params: Value) -> Result<Value> {
         })?;
 
     // Only get diagnostics if Neovim is initialized
-    #[cfg(not(test))]
     if super::nvim_available() {
         return get_diagnostics_impl(_params.path.as_deref());
     }
@@ -69,8 +68,7 @@ pub fn get_diagnostics(params: Value) -> Result<Value> {
     }))
 }
 
-/// Implementation of getDiagnostics (only compiled when not in test mode)
-#[cfg(not(test))]
+/// Implementation of getDiagnostics
 fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
     use nvim_oxi::api;
     use nvim_oxi::conversion::FromObject;

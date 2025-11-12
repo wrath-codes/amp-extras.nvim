@@ -6,10 +6,7 @@
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use nvim_oxi::libuv::AsyncHandle;
 use once_cell::sync::OnceCell;
-use std::path::PathBuf;
-
-#[cfg(not(test))]
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::errors::{AmpError, Result};
 
@@ -231,7 +228,6 @@ pub(super) fn normalize_path(path: &str) -> Result<PathBuf> {
 /// - 2 = WARN
 /// - 3 = INFO
 /// - 4 = HINT
-#[cfg(not(test))]
 pub(super) fn map_severity(severity: Option<u8>) -> &'static str {
     match severity.unwrap_or(3) {
         1 => "ERROR",
@@ -245,7 +241,6 @@ pub(super) fn map_severity(severity: Option<u8>) -> &'static str {
 /// Get line content for a diagnostic
 ///
 /// Tries to read from buffer if loaded, falls back to disk
-#[cfg(not(test))]
 pub(super) fn get_line_content(path: &Path, line_num: u32) -> String {
     use std::fs;
 

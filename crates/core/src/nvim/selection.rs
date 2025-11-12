@@ -103,13 +103,5 @@ pub(crate) fn get_mode() -> Result<api::types::GotMode> {
         .map_err(|e| crate::errors::AmpError::Other(format!("Failed to get mode: {}", e)))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_visual_selection_requires_nvim() {
-        // This function requires Neovim context with an actual buffer
-        // We'll test this in integration tests
-    }
-}
+// Tests for this module are in tests-integration/src/
+// since they require a running Neovim instance

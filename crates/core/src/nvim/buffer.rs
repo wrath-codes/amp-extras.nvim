@@ -81,21 +81,5 @@ pub(crate) fn get_line_content(path: &Path, line_num: usize) -> String {
     String::new()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_find_by_path_returns_none_when_not_found() {
-        // In test environment without Neovim, list_bufs returns empty
-        let result = find_by_path(Path::new("/nonexistent/file.txt"));
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
-    }
-
-    #[test]
-    fn test_get_line_content_returns_empty_when_not_found() {
-        let content = get_line_content(Path::new("/nonexistent/file.txt"), 0);
-        assert_eq!(content, "");
-    }
-}
+// Tests for this module are in tests-integration/src/
+// since they require a running Neovim instance
