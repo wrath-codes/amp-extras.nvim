@@ -12,9 +12,30 @@ use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::errors::{AmpError, Result};
+
+// ============================================================================
+// Neovim Context Detection
+// ============================================================================
+
+/// Flag indicating Neovim is initialized and ready for API calls
+static NVIM_READY: OnceCell<()> = OnceCell::new();
+
+/// Mark Neovim as ready for API calls
+///
+/// Should be called during plugin initialization (after AsyncHandle setup)
+pub fn mark_nvim_ready() {
+    let _ = NVIM_READY.set(());
+}
+
+/// Check if Neovim API is available
+///
+/// Returns true if we're running inside Neovim and API calls are safe
+fn nvim_available() -> bool {
+    NVIM_READY.get().is_some()
+}
 
 // ============================================================================
 // Global AsyncHandle and Notification Channel
@@ -32,10 +53,20 @@ static NVIM_TX: OnceCell<Sender<NvimMessage>> = OnceCell::new();
 /// Global AsyncHandle for triggering Neovim callbacks
 static ASYNC_HANDLE: OnceCell<AsyncHandle> = OnceCell::new();
 
+/// Work to schedule on Neovim main thread
+type ScheduledWork = Box<dyn FnOnce() + Send>;
+
+/// Global channel for scheduling work on Neovim main thread
+static WORK_TX: OnceCell<Sender<ScheduledWork>> = OnceCell::new();
+
+/// Global AsyncHandle for scheduled work
+static WORK_HANDLE: OnceCell<AsyncHandle> = OnceCell::new();
+
 /// Initialize the AsyncHandle and message channel for IDE operations
 ///
 /// Must be called before starting the server to enable nvim/notify.
 pub fn init_async_handle() -> Result<()> {
+    // Initialize notification channel
     let (tx, rx): (Sender<NvimMessage>, Receiver<NvimMessage>) = unbounded();
     
     // Create AsyncHandle with callback that processes messages from channel
@@ -55,7 +86,48 @@ pub fn init_async_handle() -> Result<()> {
     let _ = NVIM_TX.set(tx);
     let _ = ASYNC_HANDLE.set(handle);
     
+    // Initialize work scheduler channel
+    let (work_tx, work_rx): (Sender<ScheduledWork>, Receiver<ScheduledWork>) = unbounded();
+    
+    // Create AsyncHandle for scheduled work
+    let work_handle = AsyncHandle::new(move || {
+        // Process all pending work
+        while let Ok(work) = work_rx.try_recv() {
+            work();
+        }
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .map_err(|e| AmpError::Other(format!("Failed to create work AsyncHandle: {}", e)))?;
+    
+    let _ = WORK_TX.set(work_tx);
+    let _ = WORK_HANDLE.set(work_handle);
+    
+    // Mark Neovim as ready for API calls
+    mark_nvim_ready();
+    
     Ok(())
+}
+
+/// Schedule work to run on Neovim's main thread
+///
+/// This is used to safely call Neovim APIs from background threads.
+pub fn schedule_on_main_thread<F>(work: F) -> Result<()>
+where
+    F: FnOnce() + Send + 'static,
+{
+    if let Some(tx) = WORK_TX.get() {
+        if let Some(handle) = WORK_HANDLE.get() {
+            tx.send(Box::new(work))
+                .map_err(|_| AmpError::Other("Failed to send work to scheduler".into()))?;
+            handle.send()
+                .map_err(|e| AmpError::Other(format!("Failed to trigger work handle: {}", e)))?;
+            Ok(())
+        } else {
+            Err(AmpError::Other("Work handle not initialized".into()))
+        }
+    } else {
+        Err(AmpError::Other("Work scheduler not initialized".into()))
+    }
 }
 
 // ============================================================================
@@ -79,6 +151,268 @@ struct EditFileParams {
 #[derive(Debug, Deserialize)]
 struct NotifyParams {
     message: String,
+}
+
+/// Parameters for getDiagnostics
+#[derive(Debug, Deserialize)]
+struct GetDiagnosticsParams {
+    path: Option<String>,
+}
+
+/// Diagnostic entry from Neovim's vim.diagnostic.get()
+///
+/// Fields are 0-based as returned by Neovim
+#[derive(Debug, Deserialize)]
+struct NvimDiagnostic {
+    lnum: u32,
+    col: u32,
+    end_lnum: Option<u32>,
+    end_col: Option<u32>,
+    severity: Option<u8>,
+    message: String,
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Find a Neovim buffer by its file path
+///
+/// Searches all buffers for one matching the given absolute path.
+/// Prefers loaded buffers over unloaded ones.
+///
+/// # Arguments
+/// * `path` - Absolute file path to search for
+///
+/// # Returns
+/// * `Some(Buffer)` if found (preferring loaded buffers)
+/// * `None` if no buffer matches the path
+#[cfg(not(test))]
+fn find_buffer_by_path(path: &Path) -> Option<nvim_oxi::api::Buffer> {
+    use nvim_oxi::api;
+    
+    let mut fallback: Option<api::Buffer> = None;
+    
+    for buf in api::list_bufs() {
+        // Get buffer name (file path)
+        let Ok(buf_path) = buf.get_name() else {
+            continue;
+        };
+        
+        // Only consider absolute paths (skip unnamed/scratch buffers)
+        if !buf_path.is_absolute() {
+            continue;
+        }
+        
+        // Check if path matches
+        if buf_path == path {
+            // Prefer loaded buffers
+            if buf.is_loaded() {
+                return Some(buf);
+            }
+            // Remember as fallback if not loaded
+            fallback = Some(buf);
+        }
+    }
+    
+    fallback
+}
+
+/// Normalize a path to absolute form
+///
+/// Uses Neovim's fnamemodify to expand relative paths.
+/// Falls back to returning the path as-is if Neovim is not available.
+///
+/// # Arguments
+/// * `path` - Path to normalize (can be relative or absolute)
+///
+/// # Returns
+/// * Normalized absolute path
+fn normalize_path(path: &str) -> Result<PathBuf> {
+    let path_buf = PathBuf::from(path);
+    
+    // If already absolute, return as-is
+    if path_buf.is_absolute() {
+        return Ok(path_buf);
+    }
+    
+    // Try to normalize using Neovim if available
+    #[cfg(not(test))]
+    if nvim_available() {
+        use nvim_oxi::api;
+        
+        // Use vim.fn.fnamemodify(path, ':p') to get absolute path
+        let lua_expr = "vim.fn.fnamemodify(args, ':p')";
+        let result: std::result::Result<nvim_oxi::Object, _> = api::call_function(
+            "luaeval",
+            (lua_expr, path),
+        );
+        
+        if let Ok(obj) = result {
+            use nvim_oxi::conversion::FromObject;
+            if let Ok(normalized) = <String as FromObject>::from_object(obj) {
+                return Ok(PathBuf::from(normalized));
+            }
+        }
+    }
+    
+    // Fallback: use current directory
+    let cwd = std::env::current_dir()
+        .map_err(|e| AmpError::Other(format!("Failed to get current directory: {}", e)))?;
+    Ok(cwd.join(path))
+}
+
+/// Map Neovim diagnostic severity to amp.nvim string format
+///
+/// Neovim severity levels:
+/// - 1 = ERROR
+/// - 2 = WARN
+/// - 3 = INFO
+/// - 4 = HINT
+#[cfg(not(test))]
+fn map_severity(severity: Option<u8>) -> &'static str {
+    match severity.unwrap_or(3) {
+        1 => "error",
+        2 => "warning",
+        3 => "info",
+        4 => "hint",
+        _ => "info", // Default to info for unknown values
+    }
+}
+
+/// Get line content for a diagnostic
+///
+/// Tries to read from buffer if loaded, falls back to disk
+#[cfg(not(test))]
+fn get_line_content(path: &Path, line_num: u32) -> String {
+    // Try buffer first
+    if let Some(buf) = find_buffer_by_path(path) {
+        if buf.is_loaded() {
+            if let Ok(lines) = buf.get_lines(line_num as usize..(line_num as usize + 1), false) {
+                if let Some(line) = lines.into_iter().next() {
+                    return line.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
+    
+    // Fallback to disk
+    if let Ok(content) = fs::read_to_string(path) {
+        if let Some(line) = content.lines().nth(line_num as usize) {
+            return line.to_string();
+        }
+    }
+    
+    String::new()
+}
+
+/// Implementation of getDiagnostics (only compiled when not in test mode)
+#[cfg(not(test))]
+fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
+    use nvim_oxi::api;
+    use nvim_oxi::conversion::FromObject;
+    use std::collections::HashMap;
+    
+    // Collect diagnostics grouped by file URI
+    let mut entries_map: HashMap<String, Vec<Value>> = HashMap::new();
+    
+    // Iterate through all buffers
+    for buf in api::list_bufs() {
+        // Get buffer path
+        let Ok(buf_path) = buf.get_name() else {
+            continue;
+        };
+        
+        // Only consider absolute paths
+        if !buf_path.is_absolute() {
+            continue;
+        }
+        
+        let path_str = buf_path.to_string_lossy().to_string();
+        
+        // Apply path filter (prefix matching for directories)
+        if let Some(filter) = path_filter {
+            if !path_str.starts_with(filter) {
+                continue;
+            }
+        }
+        
+        // Get diagnostics for this buffer using luaeval
+        let lua_expr = "vim.json.encode(vim.diagnostic.get(vim.fn.bufnr(args)))";
+        let result: std::result::Result<nvim_oxi::Object, _> = api::call_function(
+            "luaeval",
+            (lua_expr, path_str.clone()),
+        );
+        
+        let Ok(diag_json_obj) = result else {
+            continue;
+        };
+        
+        // Convert Object to String using FromObject
+        let diag_json_str = match <String as FromObject>::from_object(diag_json_obj) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        
+        // Parse JSON into Vec<NvimDiagnostic>
+        let diags: Vec<NvimDiagnostic> = match serde_json::from_str(&diag_json_str) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        
+        // Skip if no diagnostics for this buffer
+        if diags.is_empty() {
+            continue;
+        }
+        
+        // Convert to amp.nvim format
+        let uri = format!("file://{}", path_str);
+        let diagnostics: Vec<Value> = diags
+            .into_iter()
+            .map(|diag| {
+                let line_content = get_line_content(&buf_path, diag.lnum);
+                let start_line = diag.lnum;
+                let start_char = diag.col;
+                let end_line = diag.end_lnum.unwrap_or(diag.lnum);
+                let end_char = diag.end_col.unwrap_or(diag.col);
+                
+                // Calculate character offsets (simple approach)
+                let start_offset = start_char;
+                let end_offset = end_char;
+                
+                json!({
+                    "range": {
+                        "startLine": start_line,
+                        "startCharacter": start_char,
+                        "endLine": end_line,
+                        "endCharacter": end_char
+                    },
+                    "severity": map_severity(diag.severity),
+                    "description": diag.message,
+                    "lineContent": line_content,
+                    "startOffset": start_offset,
+                    "endOffset": end_offset
+                })
+            })
+            .collect();
+        
+        entries_map.insert(uri, diagnostics);
+    }
+    
+    // Convert to entries array
+    let entries: Vec<Value> = entries_map
+        .into_iter()
+        .map(|(uri, diagnostics)| {
+            json!({
+                "uri": uri,
+                "diagnostics": diagnostics
+            })
+        })
+        .collect();
+    
+    Ok(json!({
+        "entries": entries
+    }))
 }
 
 // ============================================================================
@@ -129,26 +463,38 @@ pub fn authenticate(_params: Value) -> Result<Value> {
 /// Handle getDiagnostics request
 ///
 /// Returns diagnostics for a file or directory path.
-/// Currently returns empty diagnostics (stub implementation).
+/// Integrates with Neovim's diagnostic system.
 ///
 /// Request:
 /// ```json
-/// { "path": "/path/to/file.txt" }
+/// { "path": "/path/to/file.txt" }  // Optional - file or directory prefix
 /// ```
 ///
 /// Response:
 /// ```json
-/// { "entries": [] }
+/// {
+///   "entries": [
+///     {
+///       "uri": "file:///path/to/file.rs",
+///       "diagnostics": [...]
+///     }
+///   ]
+/// }
 /// ```
-///
-/// TODO: Integrate with Neovim's diagnostic system via nvim-oxi
-pub fn get_diagnostics(_params: Value) -> Result<Value> {
-    // For now, return empty diagnostics
-    // In the future, this should:
-    // 1. Parse the path parameter
-    // 2. Get diagnostics from Neovim's diagnostic API
-    // 3. Format them according to amp.nvim protocol
+pub fn get_diagnostics(params: Value) -> Result<Value> {
+    let params: GetDiagnosticsParams = serde_json::from_value(params)
+        .map_err(|e| AmpError::InvalidArgs {
+            command: "getDiagnostics".to_string(),
+            reason: e.to_string(),
+        })?;
     
+    // Only get diagnostics if Neovim is initialized
+    #[cfg(not(test))]
+    if nvim_available() {
+        return get_diagnostics_impl(params.path.as_deref());
+    }
+    
+    // Fallback: return empty diagnostics
     Ok(json!({
         "entries": []
     }))
@@ -156,7 +502,8 @@ pub fn get_diagnostics(_params: Value) -> Result<Value> {
 
 /// Handle ide/readFile request
 ///
-/// Reads file content from filesystem.
+/// Reads file content, preferring Neovim buffer content over disk.
+/// This ensures unsaved changes are captured.
 ///
 /// Request:
 /// ```json
@@ -165,7 +512,11 @@ pub fn get_diagnostics(_params: Value) -> Result<Value> {
 ///
 /// Response:
 /// ```json
-/// { "content": "file content here..." }
+/// {
+///   "success": true,
+///   "content": "file content here...",
+///   "encoding": "utf-8"
+/// }
 /// ```
 pub fn read_file(params: Value) -> Result<Value> {
     let params: ReadFileParams = serde_json::from_value(params)
@@ -174,16 +525,39 @@ pub fn read_file(params: Value) -> Result<Value> {
             reason: e.to_string(),
         })?;
 
-    // Validate path
-    let path = Path::new(&params.path);
-    if !path.is_absolute() {
-        return Err(AmpError::ValidationError(
-            "Path must be absolute".to_string(),
-        ));
+    // Normalize path (handles both absolute and relative paths)
+    let path = normalize_path(&params.path)?;
+
+    // Try to read from Neovim buffer first (to get unsaved changes)
+    // Only if Neovim is initialized and ready
+    #[cfg(not(test))]
+    if nvim_available() {
+        if let Some(buf) = find_buffer_by_path(&path) {
+            if buf.is_loaded() {
+                // Get line count and read all lines
+                if let Ok(line_count) = buf.line_count() {
+                    let lines_result: std::result::Result<Vec<String>, _> = buf
+                        .get_lines(0..line_count, false)
+                        .map(|iter| {
+                            iter.map(|s| s.to_string_lossy().into_owned())
+                                .collect()
+                        });
+                    
+                    if let Ok(lines) = lines_result {
+                        let content = lines.join("\n");
+                        return Ok(json!({
+                            "success": true,
+                            "content": content,
+                            "encoding": "utf-8"
+                        }));
+                    }
+                }
+            }
+        }
     }
 
-    // Read file
-    let content = fs::read_to_string(path).map_err(|e| {
+    // Fall back to reading from disk
+    let content = fs::read_to_string(&path).map_err(|e| {
         AmpError::IoError(std::io::Error::new(
             e.kind(),
             format!("Failed to read file {}: {}", params.path, e),
@@ -191,13 +565,16 @@ pub fn read_file(params: Value) -> Result<Value> {
     })?;
 
     Ok(json!({
-        "content": content
+        "success": true,
+        "content": content,
+        "encoding": "utf-8"
     }))
 }
 
 /// Handle ide/editFile request
 ///
-/// Writes file content to filesystem (whole-file replacement).
+/// Writes file content, updating Neovim buffer if it exists.
+/// This ensures edits appear immediately in the editor.
 ///
 /// Request:
 /// ```json
@@ -206,7 +583,11 @@ pub fn read_file(params: Value) -> Result<Value> {
 ///
 /// Response:
 /// ```json
-/// { "success": true }
+/// {
+///   "success": true,
+///   "message": "Wrote 123 bytes to /path/to/file.txt",
+///   "appliedChanges": true
+/// }
 /// ```
 pub fn edit_file(params: Value) -> Result<Value> {
     let params: EditFileParams = serde_json::from_value(params)
@@ -215,13 +596,8 @@ pub fn edit_file(params: Value) -> Result<Value> {
             reason: e.to_string(),
         })?;
 
-    // Validate path
-    let path = Path::new(&params.path);
-    if !path.is_absolute() {
-        return Err(AmpError::ValidationError(
-            "Path must be absolute".to_string(),
-        ));
-    }
+    // Normalize path (handles both absolute and relative paths)
+    let path = normalize_path(&params.path)?;
 
     // Create parent directory if needed
     if let Some(parent) = path.parent() {
@@ -235,8 +611,38 @@ pub fn edit_file(params: Value) -> Result<Value> {
         }
     }
 
-    // Write file
-    fs::write(path, params.content).map_err(|e| {
+    // Prepare lines from content (ensure at least one line for Neovim)
+    let mut lines: Vec<String> = params.content
+        .split('\n')
+        .map(|s| s.to_string())
+        .collect();
+    
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+
+    // Update Neovim buffer if it exists (only if Neovim is initialized and ready)
+    // Note: We only update existing buffers, not create new ones.
+    // Creating buffers can cause swap file conflicts (E325) when users open files later.
+    #[cfg(not(test))]
+    if nvim_available() {
+        if let Some(mut buf) = find_buffer_by_path(&path) {
+            // Replace entire buffer content
+            if let Ok(line_count) = buf.line_count() {
+                buf.set_lines(0..line_count, false, lines.clone())
+                    .map_err(|e| AmpError::Other(format!("Failed to set buffer lines: {}", e)))?;
+            }
+            
+            // Mark buffer as unmodified (we're about to save to disk)
+            buf.set_option("modified", false)
+                .map_err(|e| AmpError::Other(format!("Failed to set 'modified' option: {}", e)))?;
+        }
+        // If no buffer exists, just write to disk and let Neovim handle buffer creation
+        // when the user opens the file naturally
+    }
+
+    // Write to disk
+    fs::write(&path, &params.content).map_err(|e| {
         AmpError::IoError(std::io::Error::new(
             e.kind(),
             format!("Failed to write file {}: {}", params.path, e),
@@ -244,7 +650,9 @@ pub fn edit_file(params: Value) -> Result<Value> {
     })?;
 
     Ok(json!({
-        "success": true
+        "success": true,
+        "message": format!("Wrote {} bytes to {}", params.content.len(), params.path),
+        "appliedChanges": true
     }))
 }
 
@@ -381,7 +789,9 @@ mod tests {
 
         let result = read_file(json!({ "path": path })).unwrap();
 
+        assert_eq!(result["success"], json!(true));
         assert_eq!(result["content"], json!("test content"));
+        assert_eq!(result["encoding"], json!("utf-8"));
     }
 
     #[test]
@@ -399,15 +809,25 @@ mod tests {
 
     #[test]
     fn test_read_file_relative_path() {
+        use tempfile::tempdir;
+        
+        // Relative paths are now normalized to absolute
+        // Create a temp directory with a test file
+        let temp_dir = tempdir().unwrap();
+        std::env::set_current_dir(&temp_dir).unwrap();
+        
+        // Create the relative file
+        fs::create_dir_all(temp_dir.path().join("relative")).unwrap();
+        fs::write(temp_dir.path().join("relative").join("path.txt"), "relative content").unwrap();
+        
         let result = read_file(json!({ "path": "relative/path.txt" }));
 
-        assert!(result.is_err());
-        match result {
-            Err(AmpError::ValidationError(msg)) => {
-                assert!(msg.contains("absolute"));
-            }
-            _ => panic!("Expected ValidationError"),
-        }
+        // Should succeed - path gets normalized and file is found
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response["success"], json!(true));
+        assert_eq!(response["content"], json!("relative content"));
+        assert_eq!(response["encoding"], json!("utf-8"));
     }
 
     #[test]
@@ -452,7 +872,10 @@ mod tests {
         }));
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap()["success"], json!(true));
+        let response = result.unwrap();
+        assert_eq!(response["success"], json!(true));
+        assert_eq!(response["appliedChanges"], json!(true));
+        assert!(response["message"].is_string());
 
         // Verify file was written
         let content = fs::read_to_string(&file_path).unwrap();
@@ -498,18 +921,26 @@ mod tests {
 
     #[test]
     fn test_edit_file_relative_path() {
+        use tempfile::tempdir;
+        
+        // Relative paths are now normalized to absolute
+        // Create a temp directory to use as current_dir
+        let temp_dir = tempdir().unwrap();
+        std::env::set_current_dir(&temp_dir).unwrap();
+        
         let result = edit_file(json!({
             "path": "relative/path.txt",
             "content": "content"
         }));
 
-        assert!(result.is_err());
-        match result {
-            Err(AmpError::ValidationError(msg)) => {
-                assert!(msg.contains("absolute"));
-            }
-            _ => panic!("Expected ValidationError"),
-        }
+        // Should succeed - path gets normalized
+        assert!(result.is_ok());
+        
+        // Verify file was created at normalized path
+        let normalized_path = temp_dir.path().join("relative").join("path.txt");
+        assert!(normalized_path.exists());
+        let content = fs::read_to_string(&normalized_path).unwrap();
+        assert_eq!(content, "content");
     }
 
     #[test]

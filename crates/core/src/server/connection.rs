@@ -36,6 +36,10 @@ pub fn handle_connection(stream: TcpStream, expected_token: String, hub: Hub) {
             // Register client with hub
             hub.register(client_id, tx);
             
+            // Send initial state to newly connected client
+            #[cfg(not(test))]
+            send_initial_state(hub.clone());
+            
             // Run message loop
             let _ = run_message_loop(websocket, rx, client_id);
             
@@ -235,6 +239,34 @@ fn accept_with_auth(
             tungstenite::handshake::HandshakeError::Failure(err) => err,
         }
     })
+}
+
+/// Send initial state to newly connected client
+///
+/// Sends plugin metadata after 200ms, then visible files and selection after 250ms total.
+/// This gives the client time to be ready before receiving state.
+#[cfg(not(test))]
+fn send_initial_state(hub: Hub) {
+    std::thread::spawn(move || {
+        // Wait 200ms before sending plugin metadata
+        std::thread::sleep(Duration::from_millis(200));
+        
+        // Send plugin metadata (no Neovim API calls needed)
+        let version = env!("CARGO_PKG_VERSION");
+        let plugin_dir = env!("CARGO_MANIFEST_DIR");
+        let _ = crate::notifications::send_plugin_metadata(&hub, version, plugin_dir);
+        
+        // Wait additional 50ms before sending state
+        std::thread::sleep(Duration::from_millis(50));
+        
+        // Schedule state collection on Neovim main thread
+        let hub_clone = hub.clone();
+        let _ = crate::ide_ops::schedule_on_main_thread(move || {
+            // Send visible files and current selection
+            let _ = crate::autocmds::handle_visible_files_changed(&hub_clone);
+            let _ = crate::autocmds::handle_cursor_moved(&hub_clone);
+        });
+    });
 }
 
 #[cfg(test)]

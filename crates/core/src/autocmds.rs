@@ -157,7 +157,7 @@ fn setup_visible_files_autocmd(group_id: u32, hub: Arc<Hub>) -> Result<()> {
 /// Handle cursor moved event
 ///
 /// Gets current cursor position and selection, sends notification to clients.
-fn handle_cursor_moved(hub: &Hub) -> Result<()> {
+pub(crate) fn handle_cursor_moved(hub: &Hub) -> Result<()> {
     // Get current buffer and file path
     let buf = api::get_current_buf();
     let path = buf.get_name()
@@ -177,7 +177,7 @@ fn handle_cursor_moved(hub: &Hub) -> Result<()> {
 
     let (start_line, start_char, end_line, end_char, content) = if mode.mode.is_visual() {
         // Visual mode - get actual selection
-        match get_visual_selection(&buf) {
+        match get_visual_selection(&buf, &mode.mode) {
             Ok(Some((s_line, s_col, e_line, e_col, text))) => {
                 // Marks are (1,0)-indexed, convert to 0-indexed
                 let start_line = (s_line.saturating_sub(1)) as usize;
@@ -211,18 +211,37 @@ fn handle_cursor_moved(hub: &Hub) -> Result<()> {
 
 /// Get visual selection range and text
 ///
+/// Handles different visual mode types:
+/// - v (character-wise): Uses mark positions as-is
+/// - V (line-wise): Extends end column to end of line
+/// - Ctrl-V (block): Currently treats as character-wise (protocol limitation)
+///
 /// Returns (start_line, start_col, end_line, end_col, text) in (1,0)-indexed format
-fn get_visual_selection(buf: &api::Buffer) -> Result<Option<(usize, usize, usize, usize, String)>> {
+fn get_visual_selection(buf: &api::Buffer, mode_str: &nvim_oxi::api::types::ModeStr) -> Result<Option<(usize, usize, usize, usize, String)>> {
     // Get visual selection marks
     let (start_row, start_col) = buf.get_mark('<')
         .map_err(|e| crate::errors::AmpError::Other(format!("Failed to get mark '<': {}", e)))?;
-    let (end_row, end_col) = buf.get_mark('>')
+    let (end_row, mut end_col) = buf.get_mark('>')
         .map_err(|e| crate::errors::AmpError::Other(format!("Failed to get mark '>': {}", e)))?;
 
     // Check if marks are valid (> 0)
     if start_row == 0 || end_row == 0 {
         return Ok(None);
     }
+    
+    // For line-wise visual (V), extend end column to end of line
+    if mode_str.is_visual_by_line() {
+        // Get the end line to find its length
+        let end_row_0 = end_row.saturating_sub(1);
+        if let Ok(lines) = buf.get_lines(end_row_0..end_row_0 + 1, false) {
+            if let Some(line) = lines.into_iter().next() {
+                let line_str = line.to_string_lossy();
+                end_col = line_str.len();
+            }
+        }
+    }
+    // Note: Block visual mode (Ctrl-V) is treated as character-wise
+    // The amp.nvim protocol only supports single selection ranges
 
     // Convert to 0-indexed for get_text
     let start_row_0 = start_row.saturating_sub(1);
@@ -267,7 +286,7 @@ fn get_cursor_position() -> Result<(usize, usize, usize, usize, String)> {
 /// Handle visible files changed event
 ///
 /// Gets list of all visible buffers, sends notification to clients.
-fn handle_visible_files_changed(hub: &Hub) -> Result<()> {
+pub(crate) fn handle_visible_files_changed(hub: &Hub) -> Result<()> {
     // Get all windows
     let windows = api::list_wins();
 
@@ -280,6 +299,11 @@ fn handle_visible_files_changed(hub: &Hub) -> Result<()> {
             if let Ok(path) = buf.get_name() {
                 // Only include absolute paths (skip unnamed/scratch buffers)
                 if path.is_absolute() {
+                    // Only include files that exist on filesystem
+                    if !path.exists() {
+                        continue;
+                    }
+                    
                     let path_str = path.to_string_lossy().to_string();
 
                     // Deduplicate - same file might be open in multiple windows
