@@ -48,9 +48,8 @@ pub fn call(command: String, args: Object) -> nvim_oxi::Result<Object> {
 pub fn autocomplete(kind: String, prefix: String) -> nvim_oxi::Result<Vec<String>> {
     match autocomplete_impl(&kind, &prefix) {
         Ok(items) => Ok(items),
-        Err(err) => {
-            // Log error but return empty list (autocomplete should never fail visibly)
-            eprintln!("Autocomplete error: {}", err);
+        Err(_err) => {
+            // Silently return empty list (autocomplete should never fail visibly)
             Ok(vec![])
         }
     }
@@ -194,7 +193,7 @@ pub fn send_selection_changed(
 ) -> nvim_oxi::Result<Object> {
     match server::get_hub() {
         Some(hub) => {
-            crate::notifications::send_selection_changed(
+            match crate::notifications::send_selection_changed(
                 &hub,
                 &uri,
                 start_line as usize,
@@ -202,12 +201,15 @@ pub fn send_selection_changed(
                 end_line as usize,
                 end_char as usize,
                 &content,
-            );
-            
-            let result = Dictionary::from_iter([
-                ("success", Object::from(true)),
-            ]);
-            Ok(Object::from(result))
+            ) {
+                Ok(()) => {
+                    let result = Dictionary::from_iter([
+                        ("success", Object::from(true)),
+                    ]);
+                    Ok(Object::from(result))
+                }
+                Err(err) => Ok(create_error_object(&err)),
+            }
         }
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());
@@ -234,12 +236,15 @@ pub fn send_selection_changed(
 pub fn send_visible_files_changed(uris: Vec<String>) -> nvim_oxi::Result<Object> {
     match server::get_hub() {
         Some(hub) => {
-            crate::notifications::send_visible_files_changed(&hub, uris);
-            
-            let result = Dictionary::from_iter([
-                ("success", Object::from(true)),
-            ]);
-            Ok(Object::from(result))
+            match crate::notifications::send_visible_files_changed(&hub, uris) {
+                Ok(()) => {
+                    let result = Dictionary::from_iter([
+                        ("success", Object::from(true)),
+                    ]);
+                    Ok(Object::from(result))
+                }
+                Err(err) => Ok(create_error_object(&err)),
+            }
         }
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());

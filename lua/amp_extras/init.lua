@@ -64,19 +64,9 @@ end
 ---@return table|nil result Success status or nil on error
 ---@return string|nil error Error message if failed
 function M.setup_notifications()
-  -- Load notification modules
-  local selection = require("amp_extras.selection")
-  local visible_files = require("amp_extras.visible_files")
-  
-  -- Inject wrapper module reference (provides access to FFI functions)
-  selection.wrapper = M
-  visible_files.wrapper = M
-  
-  -- Setup autocmds
-  selection.setup()
-  visible_files.setup()
-  
-  return { success = true }
+  -- Call Rust FFI to setup autocmds with debouncing
+  -- Uses nvim-oxi TimerHandle for 10ms debouncing on libuv event loop
+  return ffi.setup_notifications()
 end
 
 -- ============================================================================

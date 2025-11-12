@@ -1,6 +1,5 @@
 //! Per-connection WebSocket handling
 
-use std::io::Write;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
@@ -124,7 +123,7 @@ fn handle_message(
     websocket: &mut WebSocket<TcpStream>,
     msg: Message,
     last_pong: &mut Instant,
-    client_id: u64,
+    _client_id: u64,
 ) -> Result<(), WsError> {
     match msg {
         Message::Text(text) => {
@@ -236,17 +235,6 @@ fn accept_with_auth(
             tungstenite::handshake::HandshakeError::Failure(err) => err,
         }
     })
-}
-
-/// Send a 401 Unauthorized response
-fn send_401(mut stream: TcpStream) -> std::io::Result<()> {
-    let response = "HTTP/1.1 401 Unauthorized\r\n\
-                   Content-Type: text/plain\r\n\
-                   Content-Length: 12\r\n\
-                   \r\n\
-                   Unauthorized";
-    stream.write_all(response.as_bytes())?;
-    stream.flush()
 }
 
 #[cfg(test)]

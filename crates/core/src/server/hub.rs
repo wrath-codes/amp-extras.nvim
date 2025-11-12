@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Sender;
 
+use crate::errors::{AmpError, Result};
+
 /// Client ID type
 pub type ClientId = u64;
 
@@ -64,15 +66,15 @@ impl Hub {
     }
     
     /// Send a message to a specific client
-    pub fn send_to_client(&self, id: ClientId, message: &str) -> Result<(), &'static str> {
+    pub fn send_to_client(&self, id: ClientId, message: &str) -> Result<()> {
         let clients = self.clients.lock().unwrap();
         
         if let Some(sender) = clients.get(&id) {
             sender.try_send(message.to_string())
-                .map_err(|_| "Failed to send message to client")?;
+                .map_err(|_| AmpError::HubError("Failed to send message to client".to_string()))?;
             Ok(())
         } else {
-            Err("Client not found")
+            Err(AmpError::HubError(format!("Client {} not found", id)))
         }
     }
 }
@@ -189,6 +191,12 @@ mod tests {
         
         let result = hub.send_to_client(999, "test");
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Client not found");
+        
+        match result {
+            Err(AmpError::HubError(msg)) => {
+                assert!(msg.contains("Client 999 not found"));
+            }
+            _ => panic!("Expected HubError"),
+        }
     }
 }

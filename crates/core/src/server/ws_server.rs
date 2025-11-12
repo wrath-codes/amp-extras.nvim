@@ -32,8 +32,8 @@ pub fn run_accept_loop(
                 // No incoming connections, sleep briefly
                 std::thread::sleep(Duration::from_millis(25));
             }
-            Err(e) => {
-                eprintln!("Accept error: {}", e);
+            Err(_e) => {
+                // Accept error - sleep and continue (connection handler will log errors)
                 std::thread::sleep(Duration::from_millis(100));
             }
         }

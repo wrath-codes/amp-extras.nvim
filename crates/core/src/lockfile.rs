@@ -10,6 +10,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use nvim_oxi::api;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{AmpError, Result};
@@ -71,9 +72,7 @@ pub fn write_lockfile(port: u16, token: &str) -> Result<PathBuf> {
         .unwrap_or_else(|_| String::from("/"));
     
     // Get Neovim version for ideName
-    // Note: nvim-oxi doesn't expose get_version() directly, so we use a static identifier
-    // Amp CLI uses this field for display purposes only
-    let nvim_version = String::from("nvim");
+    let nvim_version = get_nvim_version();
     
     let lockfile = Lockfile {
         port,
@@ -95,6 +94,24 @@ pub fn remove_lockfile(path: &PathBuf) -> Result<()> {
         fs::remove_file(path)?;
     }
     Ok(())
+}
+
+/// Get Neovim version string
+///
+/// Uses Vimscript to call Lua's vim.version() and formats as "nvim X.Y.Z"
+fn get_nvim_version() -> String {
+    // Use eval with Vimscript's v:lua to call vim.version()
+    // We get major, minor, patch separately since we can't easily pass a dictionary
+    let major: i64 = api::eval("v:lua.vim.version().major").unwrap_or(0);
+    let minor: i64 = api::eval("v:lua.vim.version().minor").unwrap_or(0);
+    let patch: i64 = api::eval("v:lua.vim.version().patch").unwrap_or(0);
+    
+    if major == 0 && minor == 0 && patch == 0 {
+        // All zeros means the call failed, use fallback
+        String::from("nvim")
+    } else {
+        format!("nvim {}.{}.{}", major, minor, patch)
+    }
 }
 
 #[cfg(test)]

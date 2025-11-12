@@ -55,6 +55,14 @@ pub enum AmpError {
     #[error("URL parsing error: {0}")]
     UrlParseError(String),
 
+    /// Hub error (client messaging)
+    #[error("Hub error: {0}")]
+    HubError(String),
+
+    /// Notification error (broadcast/serialization)
+    #[error("Notification error: {0}")]
+    NotificationError(String),
+
     /// Generic error (catch-all)
     #[error("{0}")]
     Other(String),
@@ -125,6 +133,8 @@ impl AmpError {
             AmpError::ValidationError(_) => "validation",
             AmpError::WebSocketError(_) => "websocket",
             AmpError::UrlParseError(_) => "url_parse",
+            AmpError::HubError(_) => "hub",
+            AmpError::NotificationError(_) => "notification",
             AmpError::Other(_) => "other",
         }
     }
@@ -151,6 +161,8 @@ impl AmpError {
             AmpError::AmpCliError(_) => -32004, // Server error (CLI)
             AmpError::ThreadParseError(_) => -32700, // Parse error
             AmpError::ConfigError(_) => -32005, // Server error (Config)
+            AmpError::HubError(_) => -32006, // Server error (Hub)
+            AmpError::NotificationError(_) => -32007, // Server error (Notification)
             AmpError::Other(_) => -32603, // Internal error
         }
     }
@@ -208,13 +220,25 @@ mod tests {
     }
 
     #[test]
+    fn test_hub_error_category() {
+        let err = AmpError::HubError("client not found".to_string());
+        assert_eq!(err.category(), "hub");
+    }
+
+    #[test]
+    fn test_notification_error_category() {
+        let err = AmpError::NotificationError("serialization failed".to_string());
+        assert_eq!(err.category(), "notification");
+    }
+
+    #[test]
     fn test_from_tungstenite_error() {
         // Create a tungstenite error by trying to parse invalid data
         let ws_err = tungstenite::Error::Protocol(
             tungstenite::error::ProtocolError::ResetWithoutClosingHandshake
         );
         let amp_err: AmpError = ws_err.into();
-        
+
         match amp_err {
             AmpError::WebSocketError(_) => {
                 assert_eq!(amp_err.category(), "websocket");
@@ -227,7 +251,7 @@ mod tests {
     fn test_from_url_parse_error() {
         let url_err = url::Url::parse("not a valid url").unwrap_err();
         let amp_err: AmpError = url_err.into();
-        
+
         match amp_err {
             AmpError::UrlParseError(_) => {
                 assert_eq!(amp_err.category(), "url_parse");
@@ -280,6 +304,14 @@ mod tests {
         assert_eq!(
             AmpError::ConfigError("error".to_string()).to_jsonrpc_code(),
             -32005
+        );
+        assert_eq!(
+            AmpError::HubError("error".to_string()).to_jsonrpc_code(),
+            -32006
+        );
+        assert_eq!(
+            AmpError::NotificationError("error".to_string()).to_jsonrpc_code(),
+            -32007
         );
         assert_eq!(
             AmpError::Other("error".to_string()).to_jsonrpc_code(),

@@ -13,7 +13,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::Path;
-use std::sync::Mutex;
 
 use crate::errors::{AmpError, Result};
 
@@ -25,7 +24,6 @@ use crate::errors::{AmpError, Result};
 #[derive(Debug, Clone)]
 struct NvimMessage {
     message: String,
-    level: Option<String>,
 }
 
 /// Global channel for sending messages to Neovim
@@ -81,8 +79,6 @@ struct EditFileParams {
 #[derive(Debug, Deserialize)]
 struct NotifyParams {
     message: String,
-    #[serde(default)]
-    level: Option<String>,
 }
 
 // ============================================================================
@@ -278,7 +274,6 @@ pub fn nvim_notify(params: Value) -> Result<()> {
     // Send message through channel
     let msg = NvimMessage {
         message: params.message,
-        level: params.level,
     };
     
     tx.send(msg)

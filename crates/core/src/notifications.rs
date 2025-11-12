@@ -8,6 +8,7 @@
 
 use serde_json::json;
 
+use crate::errors::{AmpError, Result};
 use crate::rpc::ServerNotification;
 use crate::server::Hub;
 
@@ -15,7 +16,7 @@ use crate::server::Hub;
 ///
 /// Sends plugin version and directory information.
 /// Typically sent once when a client connects.
-pub fn send_plugin_metadata(hub: &Hub, version: &str, plugin_dir: &str) {
+pub fn send_plugin_metadata(hub: &Hub, version: &str, plugin_dir: &str) -> Result<()> {
     let notification = ServerNotification::new(
         "pluginMetadata".to_string(),
         json!({
@@ -24,8 +25,10 @@ pub fn send_plugin_metadata(hub: &Hub, version: &str, plugin_dir: &str) {
         }),
     );
     
-    let json = serde_json::to_string(&notification).unwrap();
+    let json = serde_json::to_string(&notification)
+        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize pluginMetadata: {}", e)))?;
     hub.broadcast(&json);
+    Ok(())
 }
 
 /// Send selectionDidChange notification
@@ -45,7 +48,7 @@ pub fn send_selection_changed(
     end_line: usize,
     end_char: usize,
     content: &str,
-) {
+) -> Result<()> {
     let notification = ServerNotification::new(
         "selectionDidChange".to_string(),
         json!({
@@ -62,8 +65,10 @@ pub fn send_selection_changed(
         }),
     );
     
-    let json = serde_json::to_string(&notification).unwrap();
+    let json = serde_json::to_string(&notification)
+        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize selectionDidChange: {}", e)))?;
     hub.broadcast(&json);
+    Ok(())
 }
 
 /// Send visibleFilesDidChange notification
@@ -72,7 +77,7 @@ pub fn send_selection_changed(
 ///
 /// Parameters:
 /// - uris: List of file URIs currently visible
-pub fn send_visible_files_changed(hub: &Hub, uris: Vec<String>) {
+pub fn send_visible_files_changed(hub: &Hub, uris: Vec<String>) -> Result<()> {
     let notification = ServerNotification::new(
         "visibleFilesDidChange".to_string(),
         json!({
@@ -80,8 +85,10 @@ pub fn send_visible_files_changed(hub: &Hub, uris: Vec<String>) {
         }),
     );
     
-    let json = serde_json::to_string(&notification).unwrap();
+    let json = serde_json::to_string(&notification)
+        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize visibleFilesDidChange: {}", e)))?;
     hub.broadcast(&json);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -97,7 +104,8 @@ mod tests {
         
         hub.register(client_id, tx);
         
-        send_plugin_metadata(&hub, "0.1.0", "/path/to/plugin");
+        let result = send_plugin_metadata(&hub, "0.1.0", "/path/to/plugin");
+        assert!(result.is_ok());
         
         // Client should receive the notification
         let msg = rx.try_recv().unwrap();
@@ -116,7 +124,8 @@ mod tests {
         
         hub.register(client_id, tx);
         
-        send_selection_changed(&hub, "file:///test.txt", 10, 5, 10, 15, "selected");
+        let result = send_selection_changed(&hub, "file:///test.txt", 10, 5, 10, 15, "selected");
+        assert!(result.is_ok());
         
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
@@ -144,7 +153,8 @@ mod tests {
             "file:///file2.txt".to_string(),
         ];
         
-        send_visible_files_changed(&hub, uris);
+        let result = send_visible_files_changed(&hub, uris);
+        assert!(result.is_ok());
         
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
@@ -167,7 +177,8 @@ mod tests {
         hub.register(id1, tx1);
         hub.register(id2, tx2);
         
-        send_plugin_metadata(&hub, "0.1.0", "/plugin");
+        let result = send_plugin_metadata(&hub, "0.1.0", "/plugin");
+        assert!(result.is_ok());
         
         // Both clients should receive it
         assert!(rx1.try_recv().is_ok());
