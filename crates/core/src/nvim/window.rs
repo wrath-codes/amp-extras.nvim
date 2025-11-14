@@ -2,8 +2,7 @@
 //!
 //! Provides functions for working with Neovim windows.
 
-use std::collections::HashSet;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use nvim_oxi::api;
 

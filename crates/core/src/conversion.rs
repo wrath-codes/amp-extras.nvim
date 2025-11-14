@@ -1,15 +1,16 @@
 //! Conversion utilities for nvim_oxi::Object ↔ Rust types
 //!
-//! Provides centralized, type-safe conversion logic using nvim-oxi's serde integration.
-//! Used throughout the codebase for:
+//! Provides centralized, type-safe conversion logic using nvim-oxi's serde
+//! integration. Used throughout the codebase for:
 //! - FFI boundary conversions (Lua ↔ Rust)
 //! - Neovim API responses (luaeval, vim.fn.*, etc.)
 //! - Command dispatch and result handling
 
-use nvim_oxi::serde::{Deserializer, Serializer};
-use nvim_oxi::Object;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use nvim_oxi::{
+    serde::{Deserializer, Serializer},
+    Object,
+};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 // ============================================================================
@@ -19,7 +20,8 @@ use serde_json::Value;
 /// Convert nvim-oxi Object to any deserializable Rust type
 ///
 /// Uses nvim-oxi's serde integration to deserialize directly from Object.
-/// This is the preferred way to convert Neovim API results into typed Rust data.
+/// This is the preferred way to convert Neovim API results into typed Rust
+/// data.
 ///
 /// # Examples
 /// ```rust,ignore
@@ -29,7 +31,8 @@ use serde_json::Value;
 /// ```
 ///
 /// # Errors
-/// Returns `nvim_oxi::Error::Deserialize` if the Object structure doesn't match type T
+/// Returns `nvim_oxi::Error::Deserialize` if the Object structure doesn't match
+/// type T
 pub fn from_object<T: DeserializeOwned>(obj: Object) -> nvim_oxi::Result<T> {
     T::deserialize(Deserializer::new(obj)).map_err(nvim_oxi::Error::Deserialize)
 }
@@ -49,7 +52,9 @@ pub fn from_object<T: DeserializeOwned>(obj: Object) -> nvim_oxi::Result<T> {
 /// # Errors
 /// Returns `nvim_oxi::Error::Serialize` if the value cannot be serialized
 pub fn to_object<T: Serialize>(value: &T) -> nvim_oxi::Result<Object> {
-    value.serialize(Serializer::new()).map_err(nvim_oxi::Error::Serialize)
+    value
+        .serialize(Serializer::new())
+        .map_err(nvim_oxi::Error::Serialize)
 }
 
 // ============================================================================
@@ -68,7 +73,8 @@ pub fn to_object<T: Serialize>(value: &T) -> nvim_oxi::Result<Object> {
 /// ```
 ///
 /// # Errors
-/// Returns `nvim_oxi::Error::Deserialize` if Object cannot be represented as JSON
+/// Returns `nvim_oxi::Error::Deserialize` if Object cannot be represented as
+/// JSON
 pub fn object_to_json(obj: Object) -> nvim_oxi::Result<Value> {
     Value::deserialize(Deserializer::new(obj)).map_err(nvim_oxi::Error::Deserialize)
 }
@@ -88,14 +94,17 @@ pub fn object_to_json(obj: Object) -> nvim_oxi::Result<Value> {
 /// # Errors
 /// Returns `nvim_oxi::Error::Serialize` if Value cannot be converted to Object
 pub fn json_to_object(value: Value) -> nvim_oxi::Result<Object> {
-    value.serialize(Serializer::new()).map_err(nvim_oxi::Error::Serialize)
+    value
+        .serialize(Serializer::new())
+        .map_err(nvim_oxi::Error::Serialize)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nvim_oxi::{conversion::FromObject, Dictionary};
     use serde_json::json;
+
+    use super::*;
 
     // ========================================
     // Generic typed conversion tests
@@ -122,7 +131,7 @@ mod tests {
         let obj = Object::from(true);
         let result: Result<bool, _> = from_object(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 
     #[test]
@@ -192,7 +201,7 @@ mod tests {
         assert!(result.is_ok());
         let obj = result.unwrap();
         let b = <bool as FromObject>::from_object(obj).unwrap();
-        assert_eq!(b, true);
+        assert!(b);
     }
 
     #[test]

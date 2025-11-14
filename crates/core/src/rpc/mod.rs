@@ -5,47 +5,48 @@
 
 pub mod router;
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 
 /// JSON-RPC 2.0 Request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Request {
     pub jsonrpc: String,
-    pub id: Id,
-    pub method: String,
+    pub id:      Id,
+    pub method:  String,
     #[serde(default)]
-    pub params: Value,
+    pub params:  Value,
 }
 
 /// JSON-RPC 2.0 Response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
     pub jsonrpc: String,
-    pub id: Id,
+    pub id:      Id,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
+    pub result:  Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorObject>,
+    pub error:   Option<ErrorObject>,
 }
 
 /// JSON-RPC 2.0 Notification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Notification {
     pub jsonrpc: String,
-    pub method: String,
+    pub method:  String,
     #[serde(default)]
-    pub params: Value,
+    pub params:  Value,
 }
 
 /// JSON-RPC 2.0 Error Object
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorObject {
-    pub code: i32,
+    pub code:    i32,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
+    pub data:    Option<Value>,
 }
 
 /// JSON-RPC 2.0 ID (String or Number)
@@ -72,7 +73,7 @@ pub struct ClientRequest {
 /// Inner structure of client request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientRequestInner {
-    pub id: String,
+    pub id:          String,
     #[serde(flatten)]
     pub method_data: HashMap<String, Value>,
 }
@@ -90,7 +91,7 @@ pub struct ServerResponse {
 /// Inner structure of server response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerResponseInner {
-    pub id: String,
+    pub id:            String,
     #[serde(flatten)]
     pub response_data: HashMap<String, Value>,
 }
@@ -107,7 +108,7 @@ pub struct ServerNotification {
 /// Parsed request with method name and parameters
 #[derive(Debug, Clone)]
 pub struct ParsedRequest {
-    pub id: String,
+    pub id:     String,
     pub method: String,
     pub params: Value,
 }
@@ -118,12 +119,16 @@ impl ClientRequest {
         if self.client_request.method_data.len() != 1 {
             return Err("ClientRequest must have exactly one method");
         }
-        
-        let (method, params) = self.client_request.method_data.iter().next()
+
+        let (method, params) = self
+            .client_request
+            .method_data
+            .iter()
+            .next()
             .ok_or("No method in ClientRequest")?;
-        
+
         Ok(ParsedRequest {
-            id: self.client_request.id.clone(),
+            id:     self.client_request.id.clone(),
             method: method.clone(),
             params: params.clone(),
         })
@@ -135,25 +140,19 @@ impl ServerResponse {
     pub fn success(id: String, method: String, result: Value) -> Self {
         let mut response_data = HashMap::new();
         response_data.insert(method, result);
-        
+
         ServerResponse {
-            server_response: ServerResponseInner {
-                id,
-                response_data,
-            },
+            server_response: ServerResponseInner { id, response_data },
         }
     }
-    
+
     /// Create an error response for amp.nvim protocol
     pub fn error(id: String, error: ErrorObject) -> Self {
         let mut response_data = HashMap::new();
         response_data.insert("error".to_string(), serde_json::to_value(error).unwrap());
-        
+
         ServerResponse {
-            server_response: ServerResponseInner {
-                id,
-                response_data,
-            },
+            server_response: ServerResponseInner { id, response_data },
         }
     }
 }
@@ -163,7 +162,7 @@ impl ServerNotification {
     pub fn new(notification_name: String, data: Value) -> Self {
         let mut notification_data = HashMap::new();
         notification_data.insert(notification_name, data);
-        
+
         ServerNotification {
             server_notification: notification_data,
         }
@@ -172,14 +171,15 @@ impl ServerNotification {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_client_request_parse() {
         let json_str = r#"{"clientRequest":{"id":"req-123","ping":{"message":"hello"}}}"#;
         let req: ClientRequest = serde_json::from_str(json_str).unwrap();
-        
+
         let parsed = req.parse().unwrap();
         assert_eq!(parsed.id, "req-123");
         assert_eq!(parsed.method, "ping");
@@ -190,7 +190,7 @@ mod tests {
     fn test_client_request_read_file() {
         let json_str = r#"{"clientRequest":{"id":"req-456","readFile":{"path":"/tmp/test.txt"}}}"#;
         let req: ClientRequest = serde_json::from_str(json_str).unwrap();
-        
+
         let parsed = req.parse().unwrap();
         assert_eq!(parsed.id, "req-456");
         assert_eq!(parsed.method, "readFile");
@@ -204,7 +204,7 @@ mod tests {
             "ping".to_string(),
             json!({"message": "pong"}),
         );
-        
+
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("serverResponse"));
         assert!(json.contains("req-123"));
@@ -215,14 +215,14 @@ mod tests {
     #[test]
     fn test_server_response_error() {
         let error = ErrorObject {
-            code: -32602,
+            code:    -32602,
             message: "Invalid params".to_string(),
-            data: Some(json!("Missing path parameter")),
+            data:    Some(json!("Missing path parameter")),
         };
-        
+
         let resp = ServerResponse::error("req-456".to_string(), error);
         let json = serde_json::to_string(&resp).unwrap();
-        
+
         assert!(json.contains("serverResponse"));
         assert!(json.contains("req-456"));
         assert!(json.contains("error"));
@@ -235,7 +235,7 @@ mod tests {
             "selectionDidChange".to_string(),
             json!({"uri": "file:///test.txt"}),
         );
-        
+
         let json = serde_json::to_string(&notif).unwrap();
         assert!(json.contains("serverNotification"));
         assert!(json.contains("selectionDidChange"));
@@ -248,7 +248,7 @@ mod tests {
         let req: ClientRequest = serde_json::from_str(original).unwrap();
         let serialized = serde_json::to_string(&req).unwrap();
         let req2: ClientRequest = serde_json::from_str(&serialized).unwrap();
-        
+
         let parsed = req2.parse().unwrap();
         assert_eq!(parsed.method, "authenticate");
     }

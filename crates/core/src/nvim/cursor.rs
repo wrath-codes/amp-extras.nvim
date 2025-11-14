@@ -26,8 +26,8 @@ pub(crate) fn get_position() -> Result<(usize, usize)> {
         .map_err(|e| crate::errors::AmpError::Other(format!("Failed to get cursor: {}", e)))?;
 
     // Cursor positions are (1, 0)-indexed in Neovim, convert to 0-indexed
-    let line_0 = (line.saturating_sub(1)) as usize;
-    let col_0 = col as usize;
+    let line_0 = line.saturating_sub(1);
+    let col_0 = col;
 
     Ok((line_0, col_0))
 }

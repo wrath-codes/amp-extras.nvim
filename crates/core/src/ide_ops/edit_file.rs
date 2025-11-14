@@ -1,15 +1,16 @@
 //! File writing operation
 
+use std::fs;
+
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::fs;
 
 use crate::errors::{AmpError, Result};
 
 /// Parameters for ide/editFile
 #[derive(Debug, Deserialize)]
 struct EditFileParams {
-    path: String,
+    path:    String,
     content: String,
 }
 
@@ -36,10 +37,10 @@ struct EditFileParams {
 /// - InvalidArgs: Missing or invalid parameters
 /// - IoError: Failed to create directory or write file
 pub fn edit_file(params: Value) -> Result<Value> {
-    let params: EditFileParams = serde_json::from_value(params)
-        .map_err(|e| AmpError::InvalidArgs {
+    let params: EditFileParams =
+        serde_json::from_value(params).map_err(|e| AmpError::InvalidArgs {
             command: "ide/editFile".to_string(),
-            reason: e.to_string(),
+            reason:  e.to_string(),
         })?;
 
     // Normalize path (handles both absolute and relative paths)
@@ -58,10 +59,7 @@ pub fn edit_file(params: Value) -> Result<Value> {
     }
 
     // Prepare lines from content (ensure at least one line for Neovim)
-    let mut lines: Vec<String> = params.content
-        .split('\n')
-        .map(|s| s.to_string())
-        .collect();
+    let mut lines: Vec<String> = params.content.split('\n').map(|s| s.to_string()).collect();
 
     if lines.is_empty() {
         lines.push(String::new());
@@ -69,7 +67,8 @@ pub fn edit_file(params: Value) -> Result<Value> {
 
     // Update Neovim buffer if it exists (only if Neovim is initialized and ready)
     // Note: We only update existing buffers, not create new ones.
-    // Creating buffers can cause swap file conflicts (E325) when users open files later.
+    // Creating buffers can cause swap file conflicts (E325) when users open files
+    // later.
     #[cfg(not(test))]
     if super::nvim_available() {
         if let Some(mut buf) = super::find_buffer_by_path(&path) {
@@ -83,8 +82,8 @@ pub fn edit_file(params: Value) -> Result<Value> {
             buf.set_option("modified", false)
                 .map_err(|e| AmpError::Other(format!("Failed to set 'modified' option: {}", e)))?;
         }
-        // If no buffer exists, just write to disk and let Neovim handle buffer creation
-        // when the user opens the file naturally
+        // If no buffer exists, just write to disk and let Neovim handle buffer
+        // creation when the user opens the file naturally
     }
 
     // Write to disk
@@ -104,8 +103,9 @@ pub fn edit_file(params: Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::{tempdir, NamedTempFile};
+
+    use super::*;
 
     #[test]
     fn test_edit_file_success() {
@@ -198,7 +198,7 @@ mod tests {
         match result {
             Err(AmpError::InvalidArgs { command, .. }) => {
                 assert_eq!(command, "ide/editFile");
-            }
+            },
             _ => panic!("Expected InvalidArgs"),
         }
     }

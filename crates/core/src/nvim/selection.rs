@@ -2,10 +2,13 @@
 //!
 //! Provides functions for working with visual selections and marks.
 
-use nvim_oxi::api::{self, Buffer};
-use nvim_oxi::api::types::ModeStr;
+use nvim_oxi::api::{self, types::ModeStr, Buffer};
 
 use crate::errors::Result;
+
+/// Type alias for selection range
+/// (start_line, start_col, end_line, end_col, text)
+pub(crate) type SelectionRange = (usize, usize, usize, usize, String);
 
 /// Get visual selection range and text
 ///
@@ -21,19 +24,19 @@ use crate::errors::Result;
 /// # Returns
 /// `Ok(Some((start_line, start_col, end_line, end_col, text)))` where:
 /// - start_line, end_line are 1-indexed (Neovim convention)
-/// - start_col, end_col are 0-indexed (Neovim convention)  
+/// - start_col, end_col are 0-indexed (Neovim convention)
 /// - text is the selected content
 ///
 /// Returns `Ok(None)` if marks are invalid (e.g., no active selection)
 pub(crate) fn get_visual_selection(
     buf: &Buffer,
     mode_str: &ModeStr,
-) -> Result<Option<(usize, usize, usize, usize, String)>> {
+) -> Result<Option<SelectionRange>> {
     // Get visual selection marks
     let (start_row, start_col) = buf
         .get_mark('<')
         .map_err(|e| crate::errors::AmpError::Other(format!("Failed to get mark '<': {}", e)))?;
-    let (end_row, mut end_col) = buf
+    let (end_row, end_col) = buf
         .get_mark('>')
         .map_err(|e| crate::errors::AmpError::Other(format!("Failed to get mark '>': {}", e)))?;
 
@@ -43,7 +46,7 @@ pub(crate) fn get_visual_selection(
     }
 
     // Normalize selection direction - user can select backwards (end before start)
-    let (mut start_row, mut start_col, mut end_row, mut end_col) = 
+    let (start_row, mut start_col, end_row, mut end_col) =
         if start_row > end_row || (start_row == end_row && start_col > end_col) {
             // User selected backwards - swap start and end
             (end_row, end_col, start_row, start_col)
@@ -55,7 +58,7 @@ pub(crate) fn get_visual_selection(
     if mode_str.is_visual_by_line() {
         // Start at beginning of first line
         start_col = 0;
-        
+
         // End at end of last line
         let end_row_0 = end_row.saturating_sub(1);
         if let Ok(lines) = buf.get_lines(end_row_0..end_row_0 + 1, false) {
@@ -88,7 +91,13 @@ pub(crate) fn get_visual_selection(
     let selected_text = text_lines.join("\n");
 
     // Return (1,0)-indexed positions
-    Ok(Some((start_row, start_col, end_row, end_col, selected_text)))
+    Ok(Some((
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        selected_text,
+    )))
 }
 
 /// Get current mode information

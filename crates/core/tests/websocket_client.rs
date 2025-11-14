@@ -8,6 +8,7 @@
 //!   4. Watch this client receive and print notifications
 
 use std::time::Duration;
+
 use tungstenite::{connect, Message};
 
 #[test]
@@ -22,21 +23,24 @@ fn test_websocket_client() {
     println!("  4. Export them: export WS_PORT=<port> WS_TOKEN=<token>");
     println!("  5. Run this test");
     println!();
-    
+
     // Get port and token from environment
     let port = std::env::var("WS_PORT")
         .expect("Set WS_PORT environment variable (from server_start output)");
     let token = std::env::var("WS_TOKEN")
         .expect("Set WS_TOKEN environment variable (from server_start output)");
-    
-    println!("Connecting to ws://127.0.0.1:{}/?auth={}", port, &token[..8]);
-    
+
+    println!(
+        "Connecting to ws://127.0.0.1:{}/?auth={}",
+        port,
+        &token[..8]
+    );
+
     // Connect to WebSocket server
     let url = format!("ws://127.0.0.1:{}/?auth={}", port, token);
-    
-    let (mut socket, response) = connect(url)
-        .expect("Failed to connect - is the server running?");
-    
+
+    let (mut socket, response) = connect(url).expect("Failed to connect - is the server running?");
+
     println!("Connected! HTTP Status: {}", response.status());
     println!();
     println!("Waiting for notifications... (Ctrl+C to stop)");
@@ -47,14 +51,14 @@ fn test_websocket_client() {
     println!();
     println!("─────────────────────────────────────────────────────");
     println!();
-    
+
     // Note: set_read_timeout not available on MaybeTlsStream
     // Will use non-blocking read with timeout handling instead
-    
+
     let mut message_count = 0;
     let start_time = std::time::Instant::now();
-    let timeout = Duration::from_secs(5);  // Wait up to 5 seconds for messages
-    
+    let timeout = Duration::from_secs(5); // Wait up to 5 seconds for messages
+
     // Read messages for 5 seconds or until error
     loop {
         // Check timeout
@@ -62,37 +66,37 @@ fn test_websocket_client() {
             println!("⏱️  No messages received in {} seconds", timeout.as_secs());
             break;
         }
-        
+
         match socket.read() {
             Ok(msg) => {
                 message_count += 1;
-                
+
                 match msg {
                     Message::Text(text) => {
                         println!("📨 Message #{}", message_count);
-                        
+
                         // Pretty print JSON
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                             println!("{}", serde_json::to_string_pretty(&json).unwrap());
                         } else {
                             println!("{}", text);
                         }
-                        
+
                         println!();
-                    }
+                    },
                     Message::Ping(_) => {
                         println!("🏓 Received ping");
-                    }
+                    },
                     Message::Pong(_) => {
                         println!("🏓 Received pong");
-                    }
+                    },
                     Message::Close(_) => {
                         println!("👋 Server closed connection");
                         break;
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
-            }
+            },
             Err(tungstenite::Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 // Non-blocking read would block - check if we should continue
                 if start_time.elapsed() > timeout {
@@ -101,23 +105,23 @@ fn test_websocket_client() {
                 }
                 std::thread::sleep(Duration::from_millis(100));
                 continue;
-            }
+            },
             Err(tungstenite::Error::Io(e)) if e.kind() == std::io::ErrorKind::TimedOut => {
                 println!("⏱️  Read timeout - no more messages");
                 break;
-            }
+            },
             Err(e) => {
                 eprintln!("❌ Error: {}", e);
                 break;
-            }
+            },
         }
     }
-    
+
     println!();
     println!("─────────────────────────────────────────────────────");
     println!("Total messages received: {}", message_count);
     println!();
-    
+
     // Close connection
     let _ = socket.close(None);
 }

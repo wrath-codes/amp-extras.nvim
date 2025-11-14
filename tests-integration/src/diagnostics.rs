@@ -8,7 +8,7 @@ use serde_json::json;
 fn test_diagnostics_with_errors() {
     // Initialize async handle so nvim_available() returns true
     let _ = amp_extras::ide_ops::init_async_handle();
-    
+
     // Create buffer with explicit name
     let ns = api::create_namespace("amp_extras_tests");
     let mut buf = api::create_buf(true, false).unwrap();
@@ -20,16 +20,18 @@ fn test_diagnostics_with_errors() {
     // Set diagnostic via Lua with namespace using actual buffer number
     let bufnr = buf.handle();
     let lua_expr = format!("vim.diagnostic.set({}, {}, {{ {{ lnum = 0, col = 0, end_lnum = 0, end_col = 10, severity = vim.diagnostic.severity.ERROR, message = 'test error' }} }})", ns, bufnr);
-    api::call_function::<_, ()>("luaeval", (lua_expr,))
-        .unwrap();
+    api::call_function::<_, ()>("luaeval", (lua_expr,)).unwrap();
 
     // Call our diagnostics function
     let result = amp_extras::ide_ops::get_diagnostics(json!({}));
-    
+
     eprintln!("get_diagnostics result: {:?}", result);
-    
+
     let result = result.unwrap();
-    eprintln!("Diagnostics result JSON: {}", serde_json::to_string_pretty(&result).unwrap());
+    eprintln!(
+        "Diagnostics result JSON: {}",
+        serde_json::to_string_pretty(&result).unwrap()
+    );
 
     // Assertions
     let entries = result["entries"].as_array().unwrap();
@@ -46,7 +48,7 @@ fn test_diagnostics_with_errors() {
 fn test_diagnostics_filters_by_path() {
     // Initialize async handle so nvim_available() returns true
     let _ = amp_extras::ide_ops::init_async_handle();
-    
+
     // Create buffer with explicit name
     let ns = api::create_namespace("amp_test_filter_path");
     let mut buf = api::create_buf(true, false).unwrap();
@@ -56,9 +58,11 @@ fn test_diagnostics_filters_by_path() {
 
     // Set diagnostic with namespace using actual buffer number
     let bufnr = buf.handle();
-    let lua_expr = format!("vim.diagnostic.set({}, {}, {{ {{ lnum = 0, col = 0, message = 'test diagnostic' }} }})", ns, bufnr);
-    api::call_function::<_, ()>("luaeval", (lua_expr,))
-        .unwrap();
+    let lua_expr = format!(
+        "vim.diagnostic.set({}, {}, {{ {{ lnum = 0, col = 0, message = 'test diagnostic' }} }})",
+        ns, bufnr
+    );
+    api::call_function::<_, ()>("luaeval", (lua_expr,)).unwrap();
 
     // Get all diagnostics first (no filter)
     let result = amp_extras::ide_ops::get_diagnostics(json!({})).unwrap();
@@ -67,16 +71,17 @@ fn test_diagnostics_filters_by_path() {
         !entries.is_empty(),
         "Should find diagnostics without filter"
     );
-    
+
     // Get the actual buffer path from the result
     let actual_uri = entries[0]["uri"].as_str().unwrap();
-    
+
     // Now filter by a prefix that should match
     // Use /private/tmp instead of /tmp to avoid symlink issues on macOS
     let result = amp_extras::ide_ops::get_diagnostics(json!({ "path": "/private/tmp" })).unwrap();
     assert!(
         !result["entries"].as_array().unwrap().is_empty(),
-        "Should find diagnostics with /private/tmp prefix, actual uri: {}", actual_uri
+        "Should find diagnostics with /private/tmp prefix, actual uri: {}",
+        actual_uri
     );
 
     // Different prefix - should be empty
@@ -91,9 +96,9 @@ fn test_diagnostics_filters_by_path() {
 fn test_diagnostics_multiple_buffers() {
     // Initialize async handle so nvim_available() returns true
     let _ = amp_extras::ide_ops::init_async_handle();
-    
+
     let ns = api::create_namespace("amp_extras_tests");
-    
+
     // Create first buffer with diagnostic
     let mut buf1 = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf1).unwrap();
@@ -102,8 +107,7 @@ fn test_diagnostics_multiple_buffers() {
 
     let bufnr1 = buf1.handle();
     let lua_expr = format!("vim.diagnostic.set({}, {}, {{ {{ lnum = 0, col = 0, message = 'error in file 1', severity = vim.diagnostic.severity.ERROR }} }})", ns, bufnr1);
-    api::call_function::<_, ()>("luaeval", (lua_expr,))
-        .unwrap();
+    api::call_function::<_, ()>("luaeval", (lua_expr,)).unwrap();
 
     // Create second buffer with diagnostic
     let mut buf2 = api::create_buf(true, false).unwrap();
@@ -113,8 +117,7 @@ fn test_diagnostics_multiple_buffers() {
 
     let bufnr2 = buf2.handle();
     let lua_expr = format!("vim.diagnostic.set({}, {}, {{ {{ lnum = 0, col = 0, message = 'warning in file 2', severity = vim.diagnostic.severity.WARN }} }})", ns, bufnr2);
-    api::call_function::<_, ()>("luaeval", (lua_expr,))
-        .unwrap();
+    api::call_function::<_, ()>("luaeval", (lua_expr,)).unwrap();
 
     // Get all diagnostics
     let result = amp_extras::ide_ops::get_diagnostics(json!({})).unwrap();
@@ -128,7 +131,7 @@ fn test_diagnostics_multiple_buffers() {
 fn test_diagnostics_severity_mapping() {
     // Initialize async handle so nvim_available() returns true
     let _ = amp_extras::ide_ops::init_async_handle();
-    
+
     let ns = api::create_namespace("amp_extras_tests");
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();
@@ -138,8 +141,7 @@ fn test_diagnostics_severity_mapping() {
     // Test all severity levels using actual buffer number
     let bufnr = buf.handle();
     let lua_expr = format!("vim.diagnostic.set({}, {}, {{ {{ lnum = 0, col = 0, message = 'error', severity = vim.diagnostic.severity.ERROR }}, {{ lnum = 0, col = 1, message = 'warning', severity = vim.diagnostic.severity.WARN }}, {{ lnum = 0, col = 2, message = 'info', severity = vim.diagnostic.severity.INFO }}, {{ lnum = 0, col = 3, message = 'hint', severity = vim.diagnostic.severity.HINT }} }})", ns, bufnr);
-    api::call_function::<_, ()>("luaeval", (lua_expr,))
-        .unwrap();
+    api::call_function::<_, ()>("luaeval", (lua_expr,)).unwrap();
 
     let result = amp_extras::ide_ops::get_diagnostics(json!({})).unwrap();
     let entries = result["entries"].as_array().unwrap();
@@ -164,5 +166,8 @@ fn test_diagnostics_empty_when_none() {
     let entries = result["entries"].as_array().unwrap();
 
     // Should be empty when no diagnostics are set
-    assert!(entries.is_empty(), "Should not include buffers without diagnostics");
+    assert!(
+        entries.is_empty(),
+        "Should not include buffers without diagnostics"
+    );
 }

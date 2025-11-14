@@ -8,17 +8,20 @@
 use nvim_oxi::{Dictionary, Object};
 use serde_json::Value;
 
-use crate::commands;
-use crate::conversion::{json_to_object, object_to_json};
-use crate::errors::{AmpError, Result};
-use crate::server;
+use crate::{
+    commands,
+    conversion::{json_to_object, object_to_json},
+    errors::{AmpError, Result},
+    server,
+};
 
 /// Main FFI entry point for command execution
 ///
 /// Called from Lua as: `ffi.call(command, args)`
 ///
 /// # Arguments
-/// * `command` - Command name in format "category.action" (e.g., "threads.list")
+/// * `command` - Command name in format "category.action" (e.g.,
+///   "threads.list")
 /// * `args` - Command arguments as JSON object
 ///
 /// # Returns
@@ -50,7 +53,7 @@ pub fn autocomplete(kind: String, prefix: String) -> nvim_oxi::Result<Vec<String
         Err(_err) => {
             // Silently return empty list (autocomplete should never fail visibly)
             Ok(vec![])
-        }
+        },
     }
 }
 
@@ -86,10 +89,13 @@ pub fn server_start() -> nvim_oxi::Result<Object> {
                 ("success", Object::from(true)),
                 ("port", Object::from(port as i32)),
                 ("token", Object::from(token)),
-                ("lockfile", Object::from(lockfile_path.to_string_lossy().to_string())),
+                (
+                    "lockfile",
+                    Object::from(lockfile_path.to_string_lossy().to_string()),
+                ),
             ]);
             Ok(Object::from(result))
-        }
+        },
         Err(err) => Ok(create_error_object(&err)),
     }
 }
@@ -104,10 +110,8 @@ pub fn server_start() -> nvim_oxi::Result<Object> {
 /// ```
 pub fn server_stop() -> nvim_oxi::Result<Object> {
     server::stop();
-    
-    let result = Dictionary::from_iter([
-        ("success", Object::from(true)),
-    ]);
+
+    let result = Dictionary::from_iter([("success", Object::from(true))]);
     Ok(Object::from(result))
 }
 
@@ -120,9 +124,7 @@ pub fn server_stop() -> nvim_oxi::Result<Object> {
 /// { running = true }
 /// ```
 pub fn server_is_running() -> nvim_oxi::Result<Object> {
-    let result = Dictionary::from_iter([
-        ("running", Object::from(server::is_running())),
-    ]);
+    let result = Dictionary::from_iter([("running", Object::from(server::is_running()))]);
     Ok(Object::from(result))
 }
 
@@ -149,27 +151,24 @@ pub fn server_is_running() -> nvim_oxi::Result<Object> {
 pub fn setup_notifications() -> nvim_oxi::Result<Object> {
     // Get the Hub from the server (if running)
     match server::get_hub() {
-        Some(hub) => {
-            match crate::autocmds::setup_notifications(hub) {
-                Ok(()) => {
-                    let result = Dictionary::from_iter([
-                        ("success", Object::from(true)),
-                    ]);
-                    Ok(Object::from(result))
-                }
-                Err(err) => Ok(create_error_object(&err)),
-            }
-        }
+        Some(hub) => match crate::autocmds::setup_notifications(hub) {
+            Ok(()) => {
+                let result = Dictionary::from_iter([("success", Object::from(true))]);
+                Ok(Object::from(result))
+            },
+            Err(err) => Ok(create_error_object(&err)),
+        },
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());
             Ok(create_error_object(&err))
-        }
+        },
     }
 }
 
 /// Send selectionDidChange notification manually
 ///
-/// Called from Lua as: `ffi.send_selection_changed(uri, start_line, start_char, end_line, end_char, content)`
+/// Called from Lua as: `ffi.send_selection_changed(uri, start_line, start_char,
+/// end_line, end_char, content)`
 ///
 /// Returns:
 /// ```lua
@@ -202,18 +201,16 @@ pub fn send_selection_changed(
                 &content,
             ) {
                 Ok(()) => {
-                    let result = Dictionary::from_iter([
-                        ("success", Object::from(true)),
-                    ]);
+                    let result = Dictionary::from_iter([("success", Object::from(true))]);
                     Ok(Object::from(result))
-                }
+                },
                 Err(err) => Ok(create_error_object(&err)),
             }
-        }
+        },
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());
             Ok(create_error_object(&err))
-        }
+        },
     }
 }
 
@@ -234,21 +231,17 @@ pub fn send_selection_changed(
 /// ```
 pub fn send_visible_files_changed(uris: Vec<String>) -> nvim_oxi::Result<Object> {
     match server::get_hub() {
-        Some(hub) => {
-            match crate::notifications::send_visible_files_changed(&hub, uris) {
-                Ok(()) => {
-                    let result = Dictionary::from_iter([
-                        ("success", Object::from(true)),
-                    ]);
-                    Ok(Object::from(result))
-                }
-                Err(err) => Ok(create_error_object(&err)),
-            }
-        }
+        Some(hub) => match crate::notifications::send_visible_files_changed(&hub, uris) {
+            Ok(()) => {
+                let result = Dictionary::from_iter([("success", Object::from(true))]);
+                Ok(Object::from(result))
+            },
+            Err(err) => Ok(create_error_object(&err)),
+        },
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());
             Ok(create_error_object(&err))
-        }
+        },
     }
 }
 
@@ -272,21 +265,17 @@ pub fn send_visible_files_changed(uris: Vec<String>) -> nvim_oxi::Result<Object>
 /// ```
 pub fn send_user_message(message: String) -> nvim_oxi::Result<Object> {
     match server::get_hub() {
-        Some(hub) => {
-            match crate::notifications::send_user_sent_message(&hub, &message) {
-                Ok(()) => {
-                    let result = Dictionary::from_iter([
-                        ("success", Object::from(true)),
-                    ]);
-                    Ok(Object::from(result))
-                }
-                Err(err) => Ok(create_error_object(&err)),
-            }
-        }
+        Some(hub) => match crate::notifications::send_user_sent_message(&hub, &message) {
+            Ok(()) => {
+                let result = Dictionary::from_iter([("success", Object::from(true))]);
+                Ok(Object::from(result))
+            },
+            Err(err) => Ok(create_error_object(&err)),
+        },
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());
             Ok(create_error_object(&err))
-        }
+        },
     }
 }
 
@@ -310,21 +299,17 @@ pub fn send_user_message(message: String) -> nvim_oxi::Result<Object> {
 /// ```
 pub fn send_to_prompt(message: String) -> nvim_oxi::Result<Object> {
     match server::get_hub() {
-        Some(hub) => {
-            match crate::notifications::send_append_to_prompt(&hub, &message) {
-                Ok(()) => {
-                    let result = Dictionary::from_iter([
-                        ("success", Object::from(true)),
-                    ]);
-                    Ok(Object::from(result))
-                }
-                Err(err) => Ok(create_error_object(&err)),
-            }
-        }
+        Some(hub) => match crate::notifications::send_append_to_prompt(&hub, &message) {
+            Ok(()) => {
+                let result = Dictionary::from_iter([("success", Object::from(true))]);
+                Ok(Object::from(result))
+            },
+            Err(err) => Ok(create_error_object(&err)),
+        },
         None => {
             let err = crate::errors::AmpError::Other("WebSocket server not running".into());
             Ok(create_error_object(&err))
-        }
+        },
     }
 }
 
@@ -362,8 +347,9 @@ fn create_error_object(err: &AmpError) -> Object {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nvim_oxi::conversion::FromObject;
+
+    use super::*;
 
     // ========================================
     // call() function tests
@@ -382,15 +368,17 @@ mod tests {
 
         // Verify error object structure
         let err = <bool as FromObject>::from_object(dict.get("error").unwrap().clone()).unwrap();
-        assert_eq!(err, true, "error field should be true");
+        assert!(err, "error field should be true");
 
-        let msg = <String as FromObject>::from_object(dict.get("message").unwrap().clone()).unwrap();
+        let msg =
+            <String as FromObject>::from_object(dict.get("message").unwrap().clone()).unwrap();
         assert!(
             msg.contains("unknown.command"),
             "message should contain command name"
         );
 
-        let cat = <String as FromObject>::from_object(dict.get("category").unwrap().clone()).unwrap();
+        let cat =
+            <String as FromObject>::from_object(dict.get("category").unwrap().clone()).unwrap();
         assert_eq!(cat, "command", "category should be 'command'");
     }
 
@@ -494,13 +482,16 @@ mod tests {
         let obj = create_error_object(&err);
         let dict = Dictionary::from_object(obj).unwrap();
 
-        let error_flag = <bool as FromObject>::from_object(dict.get("error").unwrap().clone()).unwrap();
-        assert_eq!(error_flag, true);
+        let error_flag =
+            <bool as FromObject>::from_object(dict.get("error").unwrap().clone()).unwrap();
+        assert!(error_flag);
 
-        let msg = <String as FromObject>::from_object(dict.get("message").unwrap().clone()).unwrap();
+        let msg =
+            <String as FromObject>::from_object(dict.get("message").unwrap().clone()).unwrap();
         assert!(msg.contains("test.command"));
 
-        let cat = <String as FromObject>::from_object(dict.get("category").unwrap().clone()).unwrap();
+        let cat =
+            <String as FromObject>::from_object(dict.get("category").unwrap().clone()).unwrap();
         assert_eq!(cat, "command");
     }
 }

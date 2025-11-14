@@ -6,8 +6,10 @@ use nvim_oxi::api::Buffer;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use crate::errors::{AmpError, Result};
-use crate::notifications;
+use crate::{
+    errors::{AmpError, Result},
+    notifications,
+};
 
 /// Response for send_buffer command
 #[derive(Debug, Serialize)]
@@ -47,8 +49,13 @@ pub fn send_buffer(_params: Value) -> Result<Value> {
         .map_err(|e| AmpError::Other(format!("Failed to get buffer lines: {}", e)))?;
 
     // Convert nvim_oxi::String iterator to Vec<String>
+    // Use to_str() to preserve original UTF-8 without replacement characters
     let content = lines
-        .map(|s| s.to_string_lossy().to_string())
+        .map(|s| {
+            s.to_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|_| String::new())
+        })
         .collect::<Vec<String>>()
         .join("\n");
 
@@ -69,7 +76,7 @@ mod tests {
     #[test]
     fn test_send_buffer_accepts_empty_params() {
         // send_buffer doesn't need params
-        let params = json!({});
+        let _params = json!({});
         // Just verify it doesn't panic on deserialization
         // Actual execution requires Neovim context
     }

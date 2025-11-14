@@ -9,8 +9,8 @@
 //! - `path` - Path and URI conversions
 //! - `window` - Window operations
 
-pub mod cursor;
 pub mod buffer;
-pub mod selection;
+pub mod cursor;
 pub mod path;
+pub mod selection;
 pub mod window;

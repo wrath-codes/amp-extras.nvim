@@ -10,9 +10,11 @@
 
 use serde_json::json;
 
-use crate::errors::{AmpError, Result};
-use crate::rpc::ServerNotification;
-use crate::server::Hub;
+use crate::{
+    errors::{AmpError, Result},
+    rpc::ServerNotification,
+    server::Hub,
+};
 
 /// Send pluginMetadata notification to all clients
 ///
@@ -26,9 +28,10 @@ pub fn send_plugin_metadata(hub: &Hub, version: &str, plugin_dir: &str) -> Resul
             "pluginDirectory": plugin_dir
         }),
     );
-    
-    let json = serde_json::to_string(&notification)
-        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize pluginMetadata: {}", e)))?;
+
+    let json = serde_json::to_string(&notification).map_err(|e| {
+        AmpError::NotificationError(format!("Failed to serialize pluginMetadata: {}", e))
+    })?;
     hub.broadcast(&json);
     Ok(())
 }
@@ -66,9 +69,10 @@ pub fn send_selection_changed(
             }]
         }),
     );
-    
-    let json = serde_json::to_string(&notification)
-        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize selectionDidChange: {}", e)))?;
+
+    let json = serde_json::to_string(&notification).map_err(|e| {
+        AmpError::NotificationError(format!("Failed to serialize selectionDidChange: {}", e))
+    })?;
     hub.broadcast(&json);
     Ok(())
 }
@@ -86,9 +90,10 @@ pub fn send_visible_files_changed(hub: &Hub, uris: Vec<String>) -> Result<()> {
             "uris": uris
         }),
     );
-    
-    let json = serde_json::to_string(&notification)
-        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize visibleFilesDidChange: {}", e)))?;
+
+    let json = serde_json::to_string(&notification).map_err(|e| {
+        AmpError::NotificationError(format!("Failed to serialize visibleFilesDidChange: {}", e))
+    })?;
     hub.broadcast(&json);
     Ok(())
 }
@@ -107,9 +112,10 @@ pub fn send_user_sent_message(hub: &Hub, message: &str) -> Result<()> {
             "message": message
         }),
     );
-    
-    let json = serde_json::to_string(&notification)
-        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize userSentMessage: {}", e)))?;
+
+    let json = serde_json::to_string(&notification).map_err(|e| {
+        AmpError::NotificationError(format!("Failed to serialize userSentMessage: {}", e))
+    })?;
     hub.broadcast(&json);
     Ok(())
 }
@@ -128,36 +134,65 @@ pub fn send_append_to_prompt(hub: &Hub, message: &str) -> Result<()> {
             "message": message
         }),
     );
-    
-    let json = serde_json::to_string(&notification)
-        .map_err(|e| AmpError::NotificationError(format!("Failed to serialize appendToPrompt: {}", e)))?;
+
+    let json = serde_json::to_string(&notification).map_err(|e| {
+        AmpError::NotificationError(format!("Failed to serialize appendToPrompt: {}", e))
+    })?;
+    hub.broadcast(&json);
+    Ok(())
+}
+
+/// Send diagnosticsDidChange notification
+///
+/// Notifies clients about updated LSP diagnostics for buffers.
+///
+/// Parameters:
+/// - entries: Array of diagnostic entries (uri + diagnostics)
+pub fn send_diagnostics_changed(hub: &Hub, entries: Vec<serde_json::Value>) -> Result<()> {
+    let notification = ServerNotification::new(
+        "diagnosticsDidChange".to_string(),
+        json!({
+            "entries": entries
+        }),
+    );
+
+    let json = serde_json::to_string(&notification).map_err(|e| {
+        AmpError::NotificationError(format!("Failed to serialize diagnosticsDidChange: {}", e))
+    })?;
     hub.broadcast(&json);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crossbeam_channel::unbounded;
+
+    use super::*;
 
     #[test]
     fn test_send_plugin_metadata() {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         let result = send_plugin_metadata(&hub, "0.1.0", "/path/to/plugin");
         assert!(result.is_ok());
-        
+
         // Client should receive the notification
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
+
         assert!(value.get("serverNotification").is_some());
-        assert_eq!(value["serverNotification"]["pluginMetadata"]["version"], "0.1.0");
-        assert_eq!(value["serverNotification"]["pluginMetadata"]["pluginDirectory"], "/path/to/plugin");
+        assert_eq!(
+            value["serverNotification"]["pluginMetadata"]["version"],
+            "0.1.0"
+        );
+        assert_eq!(
+            value["serverNotification"]["pluginMetadata"]["pluginDirectory"],
+            "/path/to/plugin"
+        );
     }
 
     #[test]
@@ -165,18 +200,21 @@ mod tests {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         let result = send_selection_changed(&hub, "file:///test.txt", 10, 5, 10, 15, "selected");
         assert!(result.is_ok());
-        
+
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
+
         assert!(value["serverNotification"]["selectionDidChange"].is_object());
-        assert_eq!(value["serverNotification"]["selectionDidChange"]["uri"], "file:///test.txt");
-        
+        assert_eq!(
+            value["serverNotification"]["selectionDidChange"]["uri"],
+            "file:///test.txt"
+        );
+
         let range = &value["serverNotification"]["selectionDidChange"]["selections"][0]["range"];
         assert_eq!(range["startLine"], 10);
         assert_eq!(range["startCharacter"], 5);
@@ -189,41 +227,47 @@ mod tests {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         let uris = vec![
             "file:///file1.txt".to_string(),
             "file:///file2.txt".to_string(),
         ];
-        
+
         let result = send_visible_files_changed(&hub, uris);
         assert!(result.is_ok());
-        
+
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
+
         assert!(value["serverNotification"]["visibleFilesDidChange"]["uris"].is_array());
-        assert_eq!(value["serverNotification"]["visibleFilesDidChange"]["uris"][0], "file:///file1.txt");
-        assert_eq!(value["serverNotification"]["visibleFilesDidChange"]["uris"][1], "file:///file2.txt");
+        assert_eq!(
+            value["serverNotification"]["visibleFilesDidChange"]["uris"][0],
+            "file:///file1.txt"
+        );
+        assert_eq!(
+            value["serverNotification"]["visibleFilesDidChange"]["uris"][1],
+            "file:///file2.txt"
+        );
     }
 
     #[test]
     fn test_broadcast_to_multiple_clients() {
         let hub = Hub::new();
-        
+
         let (tx1, rx1) = unbounded();
         let (tx2, rx2) = unbounded();
-        
+
         let id1 = Hub::next_client_id();
         let id2 = Hub::next_client_id();
-        
+
         hub.register(id1, tx1);
         hub.register(id2, tx2);
-        
+
         let result = send_plugin_metadata(&hub, "0.1.0", "/plugin");
         assert!(result.is_ok());
-        
+
         // Both clients should receive it
         assert!(rx1.try_recv().is_ok());
         assert!(rx2.try_recv().is_ok());
@@ -234,17 +278,20 @@ mod tests {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         let result = send_user_sent_message(&hub, "Hello from Neovim!");
         assert!(result.is_ok());
-        
+
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
+
         assert!(value["serverNotification"]["userSentMessage"].is_object());
-        assert_eq!(value["serverNotification"]["userSentMessage"]["message"], "Hello from Neovim!");
+        assert_eq!(
+            value["serverNotification"]["userSentMessage"]["message"],
+            "Hello from Neovim!"
+        );
     }
 
     #[test]
@@ -252,17 +299,20 @@ mod tests {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         let result = send_append_to_prompt(&hub, "@file.rs#L10-L20");
         assert!(result.is_ok());
-        
+
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
+
         assert!(value["serverNotification"]["appendToPrompt"].is_object());
-        assert_eq!(value["serverNotification"]["appendToPrompt"]["message"], "@file.rs#L10-L20");
+        assert_eq!(
+            value["serverNotification"]["appendToPrompt"]["message"],
+            "@file.rs#L10-L20"
+        );
     }
 
     #[test]
@@ -270,17 +320,20 @@ mod tests {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         // Should handle empty messages (no validation as per amp.nvim)
         let result = send_user_sent_message(&hub, "");
         assert!(result.is_ok());
-        
+
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
-        assert_eq!(value["serverNotification"]["userSentMessage"]["message"], "");
+
+        assert_eq!(
+            value["serverNotification"]["userSentMessage"]["message"],
+            ""
+        );
     }
 
     #[test]
@@ -288,43 +341,52 @@ mod tests {
         let hub = Hub::new();
         let (tx, rx) = unbounded();
         let client_id = Hub::next_client_id();
-        
+
         hub.register(client_id, tx);
-        
+
         let multiline_text = "Line 1\nLine 2\nLine 3";
         let result = send_append_to_prompt(&hub, multiline_text);
         assert!(result.is_ok());
-        
+
         let msg = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&msg).unwrap();
-        
-        assert_eq!(value["serverNotification"]["appendToPrompt"]["message"], multiline_text);
+
+        assert_eq!(
+            value["serverNotification"]["appendToPrompt"]["message"],
+            multiline_text
+        );
     }
 
     #[test]
     fn test_user_messages_broadcast_to_all_clients() {
         let hub = Hub::new();
-        
+
         let (tx1, rx1) = unbounded();
         let (tx2, rx2) = unbounded();
-        
+
         let id1 = Hub::next_client_id();
         let id2 = Hub::next_client_id();
-        
+
         hub.register(id1, tx1);
         hub.register(id2, tx2);
-        
+
         let result = send_user_sent_message(&hub, "test message");
         assert!(result.is_ok());
-        
+
         // Both clients should receive it
         let msg1 = rx1.try_recv().unwrap();
         let msg2 = rx2.try_recv().unwrap();
-        
+
         let value1: serde_json::Value = serde_json::from_str(&msg1).unwrap();
         let value2: serde_json::Value = serde_json::from_str(&msg2).unwrap();
-        
-        assert_eq!(value1["serverNotification"]["userSentMessage"]["message"], "test message");
-        assert_eq!(value2["serverNotification"]["userSentMessage"]["message"], "test message");
+
+        assert_eq!(
+            value1["serverNotification"]["userSentMessage"]["message"],
+            "test message"
+        );
+        assert_eq!(
+            value2["serverNotification"]["userSentMessage"]["message"],
+            "test message"
+        );
     }
 }

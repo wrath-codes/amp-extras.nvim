@@ -1,30 +1,35 @@
 //! Command registry and dispatch system
 //!
-//! This module provides a static registry of commands that can be called from Lua.
-//! Commands are registered as "category.action" (e.g., "threads.list", "prompts.create")
-//! and dispatched to handler functions.
+//! This module provides a static registry of commands that can be called from
+//! Lua. Commands are registered as "category.action" (e.g., "threads.list",
+//! "prompts.create") and dispatched to handler functions.
 //!
 //! ## Adding a new command
 //!
-//! 1. Create handler function: `pub fn my_command(args: Value) -> Result<Value>`
-//! 2. Register in `REGISTRY`: `("category.action", my_command as CommandHandler)`
+//! 1. Create handler function: `pub fn my_command(args: Value) ->
+//!    Result<Value>`
+//! 2. Register in `REGISTRY`: `("category.action", my_command as
+//!    CommandHandler)`
 //! 3. Add tests for the command
+
+use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 use serde_json::Value;
-use std::collections::HashMap;
 
 use crate::errors::{AmpError, Result};
 
-mod send_selection;
-mod send_selection_ref;
 mod send_buffer;
 mod send_file_ref;
 mod send_line_ref;
+mod send_selection;
+mod send_selection_ref;
+mod server_status;
 
 /// Type alias for command handler functions
 ///
-/// All command handlers take a JSON Value (arguments) and return a Result<Value>
+/// All command handlers take a JSON Value (arguments) and return a
+/// Result<Value>
 pub type CommandHandler = fn(Value) -> Result<Value>;
 
 /// Static command registry
@@ -37,18 +42,37 @@ static REGISTRY: Lazy<HashMap<&'static str, CommandHandler>> = Lazy::new(|| {
     map.insert("ping", ping as CommandHandler);
 
     // Amp interaction commands
-    map.insert("send_selection", send_selection::send_selection as CommandHandler);
-    map.insert("send_selection_ref", send_selection_ref::send_selection_ref as CommandHandler);
+    map.insert(
+        "send_selection",
+        send_selection::send_selection as CommandHandler,
+    );
+    map.insert(
+        "send_selection_ref",
+        send_selection_ref::send_selection_ref as CommandHandler,
+    );
     map.insert("send_buffer", send_buffer::send_buffer as CommandHandler);
-    map.insert("send_file_ref", send_file_ref::send_file_ref as CommandHandler);
-    map.insert("send_line_ref", send_line_ref::send_line_ref as CommandHandler);
+    map.insert(
+        "send_file_ref",
+        send_file_ref::send_file_ref as CommandHandler,
+    );
+    map.insert(
+        "send_line_ref",
+        send_line_ref::send_line_ref as CommandHandler,
+    );
+
+    // Server management commands
+    map.insert(
+        "server.status",
+        server_status::server_status as CommandHandler,
+    );
 
     map
 });
 
 /// Dispatch a command by name
 ///
-/// Looks up the command in the registry and executes it with the provided arguments.
+/// Looks up the command in the registry and executes it with the provided
+/// arguments.
 ///
 /// # Arguments
 /// * `command` - Command name (e.g., "ping", "threads.list")
@@ -97,8 +121,9 @@ fn ping(args: Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     // ========================================
     // dispatch() tests
@@ -124,7 +149,7 @@ mod tests {
         match result {
             Err(AmpError::CommandNotFound(cmd)) => {
                 assert_eq!(cmd, "unknown.command");
-            }
+            },
             _ => panic!("Expected CommandNotFound error"),
         }
     }

@@ -3,8 +3,9 @@
 //! Provides functions for converting between file paths and URIs,
 //! and for getting workspace-relative paths.
 
-use nvim_oxi::api;
 use std::path::Path;
+
+use nvim_oxi::api;
 
 use crate::errors::{AmpError, Result};
 
@@ -25,20 +26,19 @@ use crate::errors::{AmpError, Result};
 /// // Returns: "file:///tmp/test%20file.txt"
 /// ```
 pub fn to_uri(path: &Path) -> Result<String> {
-    let path_str = path.to_string_lossy();
-
     // Use vim.uri_from_fname for proper percent-encoding
     #[cfg(not(test))]
     {
         use nvim_oxi::conversion::FromObject;
-        
+
+        let path_str = path.to_string_lossy();
         let obj = api::call_function("luaeval", ("vim.uri_from_fname(_A)", path_str.as_ref()))
             .map_err(|e| AmpError::Other(format!("Failed to call vim.uri_from_fname: {}", e)))?;
-        
+
         let uri: String = <String as FromObject>::from_object(obj)
             .map_err(|e| AmpError::ConversionError(format!("Failed to convert URI: {}", e)))?;
-        
-        return Ok(uri);
+
+        Ok(uri)
     }
 
     // Test fallback - simple format
@@ -68,14 +68,14 @@ pub fn from_uri(uri: &str) -> Result<std::path::PathBuf> {
     #[cfg(not(test))]
     {
         use nvim_oxi::conversion::FromObject;
-        
+
         let obj = api::call_function("luaeval", ("vim.uri_to_fname(_A)", uri))
             .map_err(|e| AmpError::Other(format!("Failed to call vim.uri_to_fname: {}", e)))?;
-        
+
         let path: String = <String as FromObject>::from_object(obj)
             .map_err(|e| AmpError::ConversionError(format!("Failed to convert path: {}", e)))?;
-        
-        return Ok(std::path::PathBuf::from(path));
+
+        Ok(std::path::PathBuf::from(path))
     }
 
     // Test fallback - simple strip prefix
@@ -122,8 +122,9 @@ pub fn to_relative(path: &Path) -> Result<String> {
     let obj = api::call_function("fnamemodify", (path_str, ":."))
         .map_err(|e| AmpError::Other(format!("Failed to call fnamemodify: {}", e)))?;
 
-    let relative: String = <String as FromObject>::from_object(obj)
-        .map_err(|e| AmpError::ConversionError(format!("Failed to convert relative path: {}", e)))?;
+    let relative: String = <String as FromObject>::from_object(obj).map_err(|e| {
+        AmpError::ConversionError(format!("Failed to convert relative path: {}", e))
+    })?;
 
     // Filter out "v:null" or other invalid values
     if !relative.is_empty() && !relative.starts_with("v:") {
@@ -134,14 +135,18 @@ pub fn to_relative(path: &Path) -> Result<String> {
     if path.is_absolute() {
         Ok(path_str.to_string())
     } else {
-        Err(AmpError::Other(format!("Failed to get relative path for: {}", path_str)))
+        Err(AmpError::Other(format!(
+            "Failed to get relative path for: {}",
+            path_str
+        )))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_to_uri() {

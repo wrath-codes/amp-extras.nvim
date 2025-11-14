@@ -7,8 +7,10 @@ use nvim_oxi::api::Buffer;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::errors::{AmpError, Result};
-use crate::notifications;
+use crate::{
+    errors::{AmpError, Result},
+    notifications,
+};
 
 /// Parameters for send_selection_ref command
 #[derive(Debug, Deserialize)]
@@ -16,14 +18,14 @@ pub struct SendSelectionRefParams {
     /// Selection start line (1-indexed)
     pub start_line: usize,
     /// Selection end line (1-indexed)
-    pub end_line: usize,
+    pub end_line:   usize,
 }
 
 /// Response for send_selection_ref command
 #[derive(Debug, Serialize)]
 pub struct SendSelectionRefResponse {
     /// Success flag
-    pub success: bool,
+    pub success:   bool,
     /// The formatted reference that was sent
     pub reference: String,
 }
@@ -31,7 +33,8 @@ pub struct SendSelectionRefResponse {
 /// Send file reference with line range to Amp prompt
 ///
 /// Uses nvim-oxi to get the current buffer path and formats a file reference
-/// like `@file.rs#L10-L20`, then sends it to the Amp prompt via `appendToPrompt`.
+/// like `@file.rs#L10-L20`, then sends it to the Amp prompt via
+/// `appendToPrompt`.
 ///
 /// # Request
 /// ```json
@@ -54,10 +57,10 @@ pub struct SendSelectionRefResponse {
 /// - Returns error if WebSocket server is not running
 /// - Returns error if notification fails to send
 pub fn send_selection_ref(params: Value) -> Result<Value> {
-    let params: SendSelectionRefParams = serde_json::from_value(params)
-        .map_err(|e| AmpError::InvalidArgs {
+    let params: SendSelectionRefParams =
+        serde_json::from_value(params).map_err(|e| AmpError::InvalidArgs {
             command: "send_selection_ref".to_string(),
-            reason: e.to_string(),
+            reason:  e.to_string(),
         })?;
 
     // Get current buffer
@@ -153,7 +156,7 @@ mod tests {
     #[test]
     fn test_response_serialize() {
         let response = SendSelectionRefResponse {
-            success: true,
+            success:   true,
             reference: "@src/main.rs#L10-L20".to_string(),
         };
         let json = serde_json::to_value(response).unwrap();

@@ -7,14 +7,16 @@ use nvim_oxi::api::{Buffer, Window};
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use crate::errors::{AmpError, Result};
-use crate::notifications;
+use crate::{
+    errors::{AmpError, Result},
+    notifications,
+};
 
 /// Response for send_line_ref command
 #[derive(Debug, Serialize)]
 pub struct SendLineRefResponse {
     /// Success flag
-    pub success: bool,
+    pub success:   bool,
     /// The formatted reference that was sent
     pub reference: String,
 }
@@ -86,7 +88,7 @@ mod tests {
     #[test]
     fn test_send_line_ref_accepts_empty_params() {
         // send_line_ref doesn't need params
-        let params = json!({});
+        let _params = json!({});
         // Just verify it doesn't panic on deserialization
         // Actual execution requires Neovim context
     }
@@ -105,7 +107,7 @@ mod tests {
     #[test]
     fn test_response_serialize() {
         let response = SendLineRefResponse {
-            success: true,
+            success:   true,
             reference: "@src/main.rs#L10".to_string(),
         };
         let json = serde_json::to_value(response).unwrap();

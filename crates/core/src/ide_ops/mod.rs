@@ -1,12 +1,13 @@
 //! IDE protocol operations - shared infrastructure
 //!
-//! Provides common functionality for IDE-specific methods that Amp CLI can call.
-//! Individual operations are in separate modules.
+//! Provides common functionality for IDE-specific methods that Amp CLI can
+//! call. Individual operations are in separate modules.
+
+use std::path::{Path, PathBuf};
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use nvim_oxi::libuv::AsyncHandle;
 use once_cell::sync::OnceCell;
-use std::path::{Path, PathBuf};
 
 use crate::errors::{AmpError, Result};
 
@@ -14,19 +15,22 @@ use crate::errors::{AmpError, Result};
 // Module Exports
 // ============================================================================
 
-mod ping;
 mod authenticate;
-mod nvim_notify;
-mod read_file;
 mod edit_file;
 mod get_diagnostics;
+mod nvim_notify;
+mod ping;
+mod read_file;
 
-pub use ping::ping;
 pub use authenticate::authenticate;
-pub use nvim_notify::nvim_notify;
-pub use read_file::read_file;
 pub use edit_file::edit_file;
 pub use get_diagnostics::get_diagnostics;
+pub use nvim_notify::nvim_notify;
+pub use ping::ping;
+pub use read_file::read_file;
+
+// Internal re-exports for autocmds module
+pub(crate) use get_diagnostics::NvimDiagnostic;
 
 // ============================================================================
 // Neovim Context Detection
@@ -45,7 +49,7 @@ pub fn mark_nvim_ready() {
 /// Check if Neovim API is available
 ///
 /// Returns true if we're running inside Neovim and API calls are safe
-pub(super) fn nvim_available() -> bool {
+pub(crate) fn nvim_available() -> bool {
     NVIM_READY.get().is_some()
 }
 
@@ -97,8 +101,11 @@ pub fn init_async_handle() -> Result<()> {
 
     // Create AsyncHandle with callback that processes messages from channel
     let handle = AsyncHandle::new(move || {
-        use nvim_oxi::{api::{self, types::LogLevel}, Dictionary};
-        
+        use nvim_oxi::{
+            api::{self, types::LogLevel},
+            Dictionary,
+        };
+
         // Process all pending messages
         while let Ok(msg) = rx.try_recv() {
             // Use type-safe api::notify instead of string-based exec
@@ -144,7 +151,8 @@ where
         if let Some(handle) = WORK_HANDLE.get() {
             tx.send(Box::new(work))
                 .map_err(|_| AmpError::Other("Failed to send work to scheduler".into()))?;
-            handle.send()
+            handle
+                .send()
                 .map_err(|e| AmpError::Other(format!("Failed to trigger work handle: {}", e)))?;
             Ok(())
         } else {
@@ -170,7 +178,6 @@ where
 /// # Returns
 /// * `Some(Buffer)` if found (preferring loaded buffers)
 /// * `None` if no buffer matches the path
-
 #[cfg(not(test))]
 pub(super) fn find_buffer_by_path(path: &Path) -> Option<nvim_oxi::api::Buffer> {
     // Use centralized buffer utilities
@@ -202,10 +209,8 @@ pub(super) fn normalize_path(path: &str) -> Result<PathBuf> {
 
         // Use vim.fn.fnamemodify(path, ':p') to get absolute path
         let lua_expr = "vim.fn.fnamemodify(args, ':p')";
-        let result: std::result::Result<nvim_oxi::Object, _> = api::call_function(
-            "luaeval",
-            (lua_expr, path),
-        );
+        let result: std::result::Result<nvim_oxi::Object, _> =
+            api::call_function("luaeval", (lua_expr, path));
 
         if let Ok(obj) = result {
             use nvim_oxi::conversion::FromObject;
@@ -216,8 +221,7 @@ pub(super) fn normalize_path(path: &str) -> Result<PathBuf> {
     }
 
     // Fallback: use current_dir + relative path
-    let current = std::env::current_dir()
-        .map_err(|e| AmpError::IoError(e))?;
+    let current = std::env::current_dir().map_err(AmpError::IoError)?;
     Ok(current.join(path_buf))
 }
 

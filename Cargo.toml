@@ -1,9 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/core",
-    "tests-integration",
-]
+members = ["crates/core", "tests-integration"]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,7 +14,10 @@ repository = "https://github.com/wrath-codes/amp-extras-rs"
 nvim-oxi = { version = "0.6", features = ["neovim-0-10", "libuv"] }
 
 # Database
-rusqlite = { version = "0.37", features = ["bundled", "serde_json"] }
+libsql = "0.9"
+dotenvy = "0.15"
+axum = "0.8"
+rusqlite = "0.37.0"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

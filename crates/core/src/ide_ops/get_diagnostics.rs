@@ -17,13 +17,13 @@ struct GetDiagnosticsParams {
 /// Fields are 0-based as returned by Neovim
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
-struct NvimDiagnostic {
-    lnum: u32,
-    col: u32,
-    end_lnum: Option<u32>,
-    end_col: Option<u32>,
-    severity: Option<u8>,
-    message: String,
+pub(crate) struct NvimDiagnostic {
+    pub(crate) lnum:     u32,
+    pub(crate) col:      u32,
+    pub(crate) end_lnum: Option<u32>,
+    pub(crate) end_col:  Option<u32>,
+    pub(crate) severity: Option<u8>,
+    pub(crate) message:  String,
 }
 
 /// Handle getDiagnostics request
@@ -51,10 +51,10 @@ struct NvimDiagnostic {
 /// # Errors
 /// - InvalidArgs: Invalid parameters
 pub fn get_diagnostics(params: Value) -> Result<Value> {
-    let _params: GetDiagnosticsParams = serde_json::from_value(params)
-        .map_err(|e| AmpError::InvalidArgs {
+    let _params: GetDiagnosticsParams =
+        serde_json::from_value(params).map_err(|e| AmpError::InvalidArgs {
             command: "getDiagnostics".to_string(),
-            reason: e.to_string(),
+            reason:  e.to_string(),
         })?;
 
     // Only get diagnostics if Neovim is initialized
@@ -70,16 +70,18 @@ pub fn get_diagnostics(params: Value) -> Result<Value> {
 
 /// Implementation of getDiagnostics
 fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
-    use nvim_oxi::api;
-    use nvim_oxi::conversion::FromObject;
     use std::collections::HashMap;
+
+    use nvim_oxi::{api, conversion::FromObject};
 
     // Collect diagnostics grouped by file URI
     let mut entries_map: HashMap<String, Vec<Value>> = HashMap::new();
 
     // Normalize the filter path (handles /tmp -> /private/tmp on macOS)
     let filter_raw = path_filter.map(|s| s.to_string());
-    let filter_canon = filter_raw.as_deref().and_then(|p| std::fs::canonicalize(p).ok());
+    let filter_canon = filter_raw
+        .as_deref()
+        .and_then(|p| std::fs::canonicalize(p).ok());
 
     // Iterate through all buffers
     for buf in api::list_bufs() {
@@ -101,17 +103,18 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
         let path_str = buf_path.to_string_lossy().to_string();
 
         // Apply path filter (prefix matching for directories)
-        // Check both raw and canonical paths to handle symlinks (e.g., /tmp -> /private/tmp)
+        // Check both raw and canonical paths to handle symlinks (e.g., /tmp ->
+        // /private/tmp)
         if filter_raw.is_some() || filter_canon.is_some() {
             let mut matches = false;
-            
+
             // Try raw path match first (fastest)
             if let Some(ref filter) = filter_raw {
                 if path_str.starts_with(filter) {
                     matches = true;
                 }
             }
-            
+
             // Try canonical path match if raw didn't match
             if !matches {
                 if let Some(ref filter_canon_path) = filter_canon {
@@ -125,7 +128,7 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
                     }
                 }
             }
-            
+
             if !matches {
                 continue;
             }
@@ -135,10 +138,8 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
         // Use buffer handle directly instead of path lookup
         let bufnr = buf.handle();
         let lua_expr = "vim.diagnostic.get(_A)";
-        let result: std::result::Result<nvim_oxi::Object, _> = api::call_function(
-            "luaeval",
-            (lua_expr, bufnr),
-        );
+        let result: std::result::Result<nvim_oxi::Object, _> =
+            api::call_function("luaeval", (lua_expr, bufnr));
 
         let Ok(diag_obj) = result else {
             continue;
@@ -156,16 +157,14 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
         }
 
         // Get LSP-compliant URI with percent-encoding
-        let uri_obj = match api::call_function(
-            "luaeval",
-            ("vim.uri_from_fname(_A)", path_str.as_str()),
-        ) {
-            Ok(obj) => obj,
-            Err(_) => {
-                // Fallback to simple format if vim.uri_from_fname fails
-                nvim_oxi::Object::from(format!("file://{}", path_str))
-            }
-        };
+        let uri_obj =
+            match api::call_function("luaeval", ("vim.uri_from_fname(_A)", path_str.as_str())) {
+                Ok(obj) => obj,
+                Err(_) => {
+                    // Fallback to simple format if vim.uri_from_fname fails
+                    nvim_oxi::Object::from(format!("file://{}", path_str))
+                },
+            };
 
         let uri: String = match <String as FromObject>::from_object(uri_obj) {
             Ok(u) => u,
@@ -222,8 +221,9 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_get_diagnostics_empty() {

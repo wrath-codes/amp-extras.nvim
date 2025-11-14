@@ -17,7 +17,7 @@ fn test_ping_command() {
 fn test_send_file_ref() {
     // Start WebSocket server for testing
     let _ = amp_extras::server::start();
-    
+
     // Create a buffer with a known path
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();
@@ -29,7 +29,7 @@ fn test_send_file_ref() {
     let reference = result["reference"].as_str().unwrap();
     assert!(reference.starts_with("@"));
     assert!(reference.contains("test.rs"));
-    
+
     // Stop server
     amp_extras::server::stop();
 }
@@ -38,12 +38,13 @@ fn test_send_file_ref() {
 fn test_send_line_ref() {
     // Start WebSocket server for testing
     let _ = amp_extras::server::start();
-    
+
     // Create buffer and set cursor position
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();
     buf.set_name("/tmp/test.rs").unwrap();
-    buf.set_lines(.., false, ["line 1", "line 2", "line 3"]).unwrap();
+    buf.set_lines(.., false, ["line 1", "line 2", "line 3"])
+        .unwrap();
 
     // Set cursor to line 2 (1-indexed)
     let mut win = api::get_current_win();
@@ -54,7 +55,7 @@ fn test_send_line_ref() {
     assert_eq!(result["success"], json!(true));
     let reference = result["reference"].as_str().unwrap();
     assert!(reference.contains("#L2"));
-    
+
     // Stop server
     amp_extras::server::stop();
 }
@@ -63,7 +64,7 @@ fn test_send_line_ref() {
 fn test_send_buffer() {
     // Start WebSocket server for testing
     let _ = amp_extras::server::start();
-    
+
     // Create buffer with content
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();
@@ -75,7 +76,7 @@ fn test_send_buffer() {
 
     assert_eq!(result["success"], json!(true));
     // send_buffer just returns success - content is sent to Amp via notification
-    
+
     // Stop server
     amp_extras::server::stop();
 }
@@ -84,7 +85,7 @@ fn test_send_buffer() {
 fn test_send_selection() {
     // Start WebSocket server for testing
     let _ = amp_extras::server::start();
-    
+
     // Create buffer with content
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();
@@ -93,13 +94,17 @@ fn test_send_selection() {
         .unwrap();
 
     // Send lines 1-2 (1-indexed)
-    let result = amp_extras::commands::dispatch("send_selection", json!({
-        "start_line": 1,
-        "end_line": 2
-    })).unwrap();
+    let result = amp_extras::commands::dispatch(
+        "send_selection",
+        json!({
+            "start_line": 1,
+            "end_line": 2
+        }),
+    )
+    .unwrap();
 
     assert_eq!(result["success"], json!(true));
-    
+
     // Stop server
     amp_extras::server::stop();
 }
@@ -108,7 +113,7 @@ fn test_send_selection() {
 fn test_send_selection_ref() {
     // Start WebSocket server for testing
     let _ = amp_extras::server::start();
-    
+
     // Create buffer with content
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();
@@ -117,15 +122,19 @@ fn test_send_selection_ref() {
         .unwrap();
 
     // Send reference for lines 2-3 (1-indexed)
-    let result = amp_extras::commands::dispatch("send_selection_ref", json!({
-        "start_line": 2,
-        "end_line": 3
-    })).unwrap();
+    let result = amp_extras::commands::dispatch(
+        "send_selection_ref",
+        json!({
+            "start_line": 2,
+            "end_line": 3
+        }),
+    )
+    .unwrap();
 
     assert_eq!(result["success"], json!(true));
     let reference = result["reference"].as_str().unwrap();
     assert!(reference.contains("#L2-L3") || reference.contains("L2"));
-    
+
     // Stop server
     amp_extras::server::stop();
 }
@@ -139,7 +148,7 @@ fn test_command_not_found() {
 #[nvim_oxi::test]
 fn test_list_commands() {
     let commands = amp_extras::commands::list_commands();
-    
+
     assert!(!commands.is_empty());
     assert!(commands.contains(&"ping".to_string()));
     assert!(commands.contains(&"send_file_ref".to_string()));

@@ -30,10 +30,10 @@ struct NotifyParams {
 /// - InvalidArgs: Missing or invalid message parameter
 /// - Other: AsyncHandle not initialized (server not started)
 pub fn nvim_notify(params: Value) -> Result<()> {
-    let params: NotifyParams = serde_json::from_value(params)
-        .map_err(|e| AmpError::InvalidArgs {
+    let params: NotifyParams =
+        serde_json::from_value(params).map_err(|e| AmpError::InvalidArgs {
             command: "nvim/notify".to_string(),
-            reason: e.to_string(),
+            reason:  e.to_string(),
         })?;
 
     // Get channel sender
@@ -53,7 +53,8 @@ pub fn nvim_notify(params: Value) -> Result<()> {
         .map_err(|e| AmpError::Other(format!("Failed to send message: {}", e)))?;
 
     // Trigger AsyncHandle to process the message
-    async_handle.send()
+    async_handle
+        .send()
         .map_err(|e| AmpError::Other(format!("Failed to trigger AsyncHandle: {}", e)))?;
 
     Ok(())
@@ -61,8 +62,9 @@ pub fn nvim_notify(params: Value) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_nvim_notify_without_async_handle() {
@@ -75,7 +77,7 @@ mod tests {
         match result {
             Err(AmpError::Other(msg)) => {
                 assert!(msg.contains("AsyncHandle not initialized"));
-            }
+            },
             _ => panic!("Expected 'AsyncHandle not initialized' error"),
         }
     }
@@ -88,7 +90,7 @@ mod tests {
         match result {
             Err(AmpError::InvalidArgs { command, .. }) => {
                 assert_eq!(command, "nvim/notify");
-            }
+            },
             _ => panic!("Expected InvalidArgs"),
         }
     }
@@ -101,7 +103,7 @@ mod tests {
         match result {
             Err(AmpError::InvalidArgs { .. }) => {
                 // Expected
-            }
+            },
             _ => panic!("Expected InvalidArgs"),
         }
     }

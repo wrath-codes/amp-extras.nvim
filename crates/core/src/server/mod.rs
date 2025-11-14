@@ -3,36 +3,41 @@
 //! This module implements a WebSocket server that listens on a random port,
 //! writes lockfiles with auth tokens, and accepts connections from Amp CLI.
 
-mod ws_server;
 mod connection;
+mod events;
 mod hub;
+mod ws_server;
+
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    thread::JoinHandle,
+};
 
 pub use hub::Hub;
-
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
-
 use once_cell::sync::Lazy;
 
 /// Server handle for lifecycle management
 pub struct ServerHandle {
-    shutdown: Arc<AtomicBool>,
-    join_handle: Option<JoinHandle<()>>,
+    shutdown:      Arc<AtomicBool>,
+    join_handle:   Option<JoinHandle<()>>,
     lockfile_path: PathBuf,
-    hub: Hub,
+    hub:           Hub,
+    port:          u16,
 }
 
 impl ServerHandle {
     /// Stop the server and clean up resources
     pub fn stop(&mut self) {
         self.shutdown.store(true, Ordering::SeqCst);
-        
+
         if let Some(handle) = self.join_handle.take() {
             let _ = handle.join();
         }
-        
+
         let _ = std::fs::remove_file(&self.lockfile_path);
     }
 }
@@ -53,60 +58,72 @@ pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
     // Initialize AsyncHandle for IDE operations (nvim/notify)
     crate::ide_ops::init_async_handle()?;
     let mut server = SERVER.lock().unwrap();
-    
+
     if server.is_some() {
-        return Err(crate::errors::AmpError::Other("Server already running".into()));
+        return Err(crate::errors::AmpError::Other(
+            "Server already running".into(),
+        ));
     }
-    
+
     // Bind to random port
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let port = listener.local_addr()?.port();
-    
+
     // Generate token and write lockfile
     let token = crate::lockfile::generate_token(32);
     let lockfile_path = crate::lockfile::write_lockfile(port, &token)?;
-    
+
     // Create hub for client management
     let hub = Hub::new();
-    
+
     // Spawn server thread
     let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_clone = Arc::clone(&shutdown);
     let token_clone = token.clone();
     let hub_clone = hub.clone();
-    
+
     let join_handle = std::thread::spawn(move || {
         ws_server::run_accept_loop(listener, token_clone, hub_clone, shutdown_clone);
     });
-    
+
     // Store server handle
     let handle = ServerHandle {
         shutdown,
         join_handle: Some(join_handle),
         lockfile_path: lockfile_path.clone(),
         hub,
+        port,
     };
-    
+
     *server = Some(handle);
-    
+
+    // Fire server started event
+    #[cfg(not(test))]
+    events::notify_server_started();
+
     Ok((port, token, lockfile_path))
 }
 
 /// Stop the WebSocket server
 pub fn stop() {
     let mut server = SERVER.lock().unwrap();
-    
+
     if let Some(mut handle) = server.take() {
         handle.stop();
+
+        // Fire server stopped event
+        #[cfg(not(test))]
+        events::notify_server_stopped();
     }
 }
 
 /// Check if server is running
 pub fn is_running() -> bool {
     let server = SERVER.lock().unwrap();
-    
-    server.as_ref()
+
+    server
+        .as_ref()
         .map(|h| !h.shutdown.load(Ordering::Relaxed))
         .unwrap_or(false)
 }
@@ -116,17 +133,30 @@ pub fn is_running() -> bool {
 /// Returns None if server is not running.
 pub fn get_hub() -> Option<Hub> {
     let server = SERVER.lock().unwrap();
-    
-    server.as_ref()
+
+    server
+        .as_ref()
         .filter(|h| !h.shutdown.load(Ordering::Relaxed))
         .map(|h| h.hub.clone())
 }
 
+/// Get the server port (if server is running)
+///
+/// Returns None if server is not running.
+pub fn get_port() -> Option<u16> {
+    let server = SERVER.lock().unwrap();
+
+    server
+        .as_ref()
+        .filter(|h| !h.shutdown.load(Ordering::Relaxed))
+        .map(|h| h.port)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{thread, time::Duration};
+
     use super::*;
-    use std::thread;
-    use std::time::Duration;
 
     // NOTE: Server lifecycle tests require AsyncHandle from Neovim context.
     // These tests are skipped in Rust unit tests.

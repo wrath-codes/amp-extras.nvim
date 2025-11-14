@@ -25,7 +25,7 @@ pub enum AmpError {
 
     /// Database error
     #[error("Database error: {0}")]
-    DatabaseError(#[from] rusqlite::Error),
+    DatabaseError(#[from] libsql::Error),
 
     /// I/O error
     #[error("I/O error: {0}")]
@@ -108,17 +108,20 @@ impl AmpError {
     pub fn user_message(&self) -> String {
         match self {
             AmpError::CommandNotFound(cmd) => {
-                format!("Command '{}' not found. Run :AmpHelp for available commands.", cmd)
-            }
+                format!(
+                    "Command '{}' not found. Run :AmpHelp for available commands.",
+                    cmd
+                )
+            },
             AmpError::InvalidArgs { command, reason } => {
                 format!("Invalid arguments for '{}': {}", command, reason)
-            }
+            },
             AmpError::AmpCliError(msg) => {
                 format!("Amp CLI error: {}", msg)
-            }
+            },
             AmpError::DatabaseError(err) => {
                 format!("Database error: {}", err)
-            }
+            },
             _ => self.to_string(),
         }
     }
@@ -155,21 +158,21 @@ impl AmpError {
     /// - -32000 to -32099: Server errors (custom)
     pub fn to_jsonrpc_code(&self) -> i32 {
         match self {
-            AmpError::SerdeError(_) => -32700, // Parse error
-            AmpError::InvalidArgs { .. } => -32602, // Invalid params
-            AmpError::CommandNotFound(_) => -32601, // Method not found
-            AmpError::ValidationError(_) => -32600, // Invalid request
-            AmpError::WebSocketError(_) => -32001, // Server error (WebSocket)
-            AmpError::UrlParseError(_) => -32600, // Invalid request
-            AmpError::DatabaseError(_) => -32002, // Server error (Database)
-            AmpError::IoError(_) => -32003, // Server error (I/O)
-            AmpError::AmpCliError(_) => -32004, // Server error (CLI)
-            AmpError::ThreadParseError(_) => -32700, // Parse error
-            AmpError::ConfigError(_) => -32005, // Server error (Config)
-            AmpError::HubError(_) => -32006, // Server error (Hub)
+            AmpError::SerdeError(_) => -32700,        // Parse error
+            AmpError::InvalidArgs { .. } => -32602,   // Invalid params
+            AmpError::CommandNotFound(_) => -32601,   // Method not found
+            AmpError::ValidationError(_) => -32600,   // Invalid request
+            AmpError::WebSocketError(_) => -32001,    // Server error (WebSocket)
+            AmpError::UrlParseError(_) => -32600,     // Invalid request
+            AmpError::DatabaseError(_) => -32002,     // Server error (Database)
+            AmpError::IoError(_) => -32003,           // Server error (I/O)
+            AmpError::AmpCliError(_) => -32004,       // Server error (CLI)
+            AmpError::ThreadParseError(_) => -32700,  // Parse error
+            AmpError::ConfigError(_) => -32005,       // Server error (Config)
+            AmpError::HubError(_) => -32006,          // Server error (Hub)
             AmpError::NotificationError(_) => -32007, // Server error (Notification)
-            AmpError::ConversionError(_) => -32008, // Server error (Conversion)
-            AmpError::Other(_) => -32603, // Internal error
+            AmpError::ConversionError(_) => -32008,   // Server error (Conversion)
+            AmpError::Other(_) => -32603,             // Internal error
         }
     }
 }
@@ -200,7 +203,7 @@ mod tests {
         assert_eq!(
             AmpError::InvalidArgs {
                 command: "test".to_string(),
-                reason: "bad".to_string()
+                reason:  "bad".to_string(),
             }
             .category(),
             "arguments"
@@ -241,14 +244,14 @@ mod tests {
     fn test_from_tungstenite_error() {
         // Create a tungstenite error by trying to parse invalid data
         let ws_err = tungstenite::Error::Protocol(
-            tungstenite::error::ProtocolError::ResetWithoutClosingHandshake
+            tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
         );
         let amp_err: AmpError = ws_err.into();
 
         match amp_err {
             AmpError::WebSocketError(_) => {
                 assert_eq!(amp_err.category(), "websocket");
-            }
+            },
             _ => panic!("Expected WebSocketError"),
         }
     }
@@ -261,7 +264,7 @@ mod tests {
         match amp_err {
             AmpError::UrlParseError(_) => {
                 assert_eq!(amp_err.category(), "url_parse");
-            }
+            },
             _ => panic!("Expected UrlParseError"),
         }
     }
@@ -270,7 +273,8 @@ mod tests {
     fn test_jsonrpc_error_codes() {
         // Standard JSON-RPC error codes
         assert_eq!(
-            AmpError::SerdeError(serde_json::from_str::<i32>("invalid").unwrap_err()).to_jsonrpc_code(),
+            AmpError::SerdeError(serde_json::from_str::<i32>("invalid").unwrap_err())
+                .to_jsonrpc_code(),
             -32700 // Parse error
         );
         assert_eq!(
@@ -280,7 +284,7 @@ mod tests {
         assert_eq!(
             AmpError::InvalidArgs {
                 command: "test".to_string(),
-                reason: "bad".to_string()
+                reason:  "bad".to_string(),
             }
             .to_jsonrpc_code(),
             -32602 // Invalid params
@@ -296,11 +300,12 @@ mod tests {
             -32001
         );
         assert_eq!(
-            AmpError::DatabaseError(rusqlite::Error::InvalidQuery).to_jsonrpc_code(),
+            AmpError::DatabaseError(libsql::Error::Sqlite3UnsupportedStatement).to_jsonrpc_code(),
             -32002
         );
         assert_eq!(
-            AmpError::IoError(std::io::Error::new(std::io::ErrorKind::NotFound, "test")).to_jsonrpc_code(),
+            AmpError::IoError(std::io::Error::new(std::io::ErrorKind::NotFound, "test"))
+                .to_jsonrpc_code(),
             -32003
         );
         assert_eq!(

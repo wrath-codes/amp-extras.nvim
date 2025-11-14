@@ -1,8 +1,12 @@
 //! Connection registry and broadcast support
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+};
 
 use crossbeam_channel::Sender;
 
@@ -30,47 +34,49 @@ impl Hub {
             clients: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    
+
     /// Generate a unique client ID
     pub fn next_client_id() -> ClientId {
         NEXT_CLIENT_ID.fetch_add(1, Ordering::SeqCst)
     }
-    
+
     /// Register a new client with its message sender
     pub fn register(&self, id: ClientId, sender: Sender<ClientMessage>) {
         let mut clients = self.clients.lock().unwrap();
         clients.insert(id, sender);
     }
-    
+
     /// Unregister a client
     pub fn unregister(&self, id: ClientId) {
         let mut clients = self.clients.lock().unwrap();
         clients.remove(&id);
     }
-    
+
     /// Get count of connected clients
     pub fn client_count(&self) -> usize {
         self.clients.lock().unwrap().len()
     }
-    
+
     /// Broadcast a message to all connected clients
     ///
-    /// Sends the message to all registered clients. If sending fails for any client,
-    /// that client is silently skipped (they may have disconnected).
+    /// Sends the message to all registered clients. If sending fails for any
+    /// client, that client is silently skipped (they may have
+    /// disconnected).
     pub fn broadcast(&self, message: &str) {
         let clients = self.clients.lock().unwrap();
-        
+
         for (_id, sender) in clients.iter() {
             let _ = sender.try_send(message.to_string());
         }
     }
-    
+
     /// Send a message to a specific client
     pub fn send_to_client(&self, id: ClientId, message: &str) -> Result<()> {
         let clients = self.clients.lock().unwrap();
-        
+
         if let Some(sender) = clients.get(&id) {
-            sender.try_send(message.to_string())
+            sender
+                .try_send(message.to_string())
                 .map_err(|_| AmpError::HubError("Failed to send message to client".to_string()))?;
             Ok(())
         } else {
@@ -87,8 +93,9 @@ impl Default for Hub {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crossbeam_channel::unbounded;
+
+    use super::*;
 
     #[test]
     fn test_hub_new() {
@@ -141,23 +148,23 @@ mod tests {
     #[test]
     fn test_broadcast() {
         let hub = Hub::new();
-        
+
         // Create 3 clients with real channels
         let (tx1, rx1) = unbounded();
         let (tx2, rx2) = unbounded();
         let (tx3, rx3) = unbounded();
-        
+
         let id1 = Hub::next_client_id();
         let id2 = Hub::next_client_id();
         let id3 = Hub::next_client_id();
-        
+
         hub.register(id1, tx1);
         hub.register(id2, tx2);
         hub.register(id3, tx3);
-        
+
         // Broadcast a message
         hub.broadcast("test message");
-        
+
         // All clients should receive it
         assert_eq!(rx1.try_recv().unwrap(), "test message");
         assert_eq!(rx2.try_recv().unwrap(), "test message");
@@ -167,19 +174,19 @@ mod tests {
     #[test]
     fn test_send_to_client() {
         let hub = Hub::new();
-        
+
         let (tx1, rx1) = unbounded();
         let (tx2, rx2) = unbounded();
-        
+
         let id1 = Hub::next_client_id();
         let id2 = Hub::next_client_id();
-        
+
         hub.register(id1, tx1);
         hub.register(id2, tx2);
-        
+
         // Send to specific client
         hub.send_to_client(id1, "message for client 1").unwrap();
-        
+
         // Only client 1 should receive it
         assert_eq!(rx1.try_recv().unwrap(), "message for client 1");
         assert!(rx2.try_recv().is_err()); // Client 2 should have nothing
@@ -188,14 +195,14 @@ mod tests {
     #[test]
     fn test_send_to_nonexistent_client() {
         let hub = Hub::new();
-        
+
         let result = hub.send_to_client(999, "test");
         assert!(result.is_err());
-        
+
         match result {
             Err(AmpError::HubError(msg)) => {
                 assert!(msg.contains("Client 999 not found"));
-            }
+            },
             _ => panic!("Expected HubError"),
         }
     }

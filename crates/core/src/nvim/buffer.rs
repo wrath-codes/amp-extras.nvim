@@ -16,6 +16,7 @@ use crate::errors::Result;
 /// - `Ok(Some(path))` - Absolute path to the buffer's file
 /// - `Ok(None)` - Buffer has no associated file (unnamed/scratch)
 /// - `Err(_)` - Error getting buffer name
+#[allow(dead_code)]
 pub(crate) fn current_path() -> Result<Option<PathBuf>> {
     let buf = api::get_current_buf();
     let path = buf
@@ -57,7 +58,8 @@ pub(crate) fn find_by_path(path: &Path) -> Result<Option<Buffer>> {
 
 /// Get the content of a specific line from a file path
 ///
-/// Returns empty string if the file is not loaded in a buffer or line doesn't exist.
+/// Returns empty string if the file is not loaded in a buffer or line doesn't
+/// exist.
 ///
 /// # Arguments
 /// * `path` - Path to the file

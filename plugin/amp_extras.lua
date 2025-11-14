@@ -1,5 +1,5 @@
 -- amp-extras: Neovim plugin initialization
--- 
+--
 -- User commands are registered in Rust (see crates/core/src/lib.rs)
 -- This file handles Lua-side initialization only
 

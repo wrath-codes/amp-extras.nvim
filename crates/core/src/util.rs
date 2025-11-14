@@ -9,7 +9,7 @@ pub fn ct_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    
+
     a.as_bytes().ct_eq(b.as_bytes()).into()
 }
 

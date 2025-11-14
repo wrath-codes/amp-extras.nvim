@@ -1,8 +1,9 @@
 //! File reading operation
 
+use std::fs;
+
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::fs;
 
 use crate::errors::{AmpError, Result};
 
@@ -35,10 +36,10 @@ struct ReadFileParams {
 /// - InvalidArgs: Missing or invalid path parameter
 /// - IoError: File not found or read error
 pub fn read_file(params: Value) -> Result<Value> {
-    let params: ReadFileParams = serde_json::from_value(params)
-        .map_err(|e| AmpError::InvalidArgs {
+    let params: ReadFileParams =
+        serde_json::from_value(params).map_err(|e| AmpError::InvalidArgs {
             command: "ide/readFile".to_string(),
-            reason: e.to_string(),
+            reason:  e.to_string(),
         })?;
 
     // Normalize path (handles both absolute and relative paths)
@@ -55,8 +56,12 @@ pub fn read_file(params: Value) -> Result<Value> {
                     let lines_result: std::result::Result<Vec<String>, _> = buf
                         .get_lines(0..line_count, false)
                         .map(|iter| {
-                            iter.map(|s| s.to_string_lossy().into_owned())
-                                .collect()
+                            iter.map(|s| {
+                                s.to_str()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|_| String::new())
+                            })
+                            .collect()
                         });
 
                     if let Ok(lines) = lines_result {
@@ -89,8 +94,9 @@ pub fn read_file(params: Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::NamedTempFile;
+
+    use super::*;
 
     #[test]
     fn test_read_file_success() {
@@ -114,7 +120,7 @@ mod tests {
         match result {
             Err(AmpError::IoError(_)) => {
                 // Expected
-            }
+            },
             _ => panic!("Expected IoError"),
         }
     }
@@ -130,7 +136,11 @@ mod tests {
 
         // Create the relative file
         fs::create_dir_all(temp_dir.path().join("relative")).unwrap();
-        fs::write(temp_dir.path().join("relative").join("path.txt"), "relative content").unwrap();
+        fs::write(
+            temp_dir.path().join("relative").join("path.txt"),
+            "relative content",
+        )
+        .unwrap();
 
         let result = read_file(json!({ "path": "relative/path.txt" }));
 
@@ -150,7 +160,7 @@ mod tests {
         match result {
             Err(AmpError::InvalidArgs { command, .. }) => {
                 assert_eq!(command, "ide/readFile");
-            }
+            },
             _ => panic!("Expected InvalidArgs"),
         }
     }
@@ -163,7 +173,7 @@ mod tests {
         match result {
             Err(AmpError::InvalidArgs { .. }) => {
                 // Expected
-            }
+            },
             _ => panic!("Expected InvalidArgs"),
         }
     }

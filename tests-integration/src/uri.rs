@@ -1,8 +1,9 @@
 //! Integration tests for URI and path utilities
 
+use std::path::Path;
+
 use amp_extras_core as amp_extras;
 use nvim_oxi::api;
-use std::path::Path;
 
 #[nvim_oxi::test]
 fn test_uri_from_path() {

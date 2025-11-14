@@ -1,13 +1,16 @@
 //! Send selected text to Amp prompt
 //!
-//! Uses nvim-oxi to get buffer lines from visual selection and sends to Amp prompt.
+//! Uses nvim-oxi to get buffer lines from visual selection and sends to Amp
+//! prompt.
 
 use nvim_oxi::api::Buffer;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::errors::{AmpError, Result};
-use crate::notifications;
+use crate::{
+    errors::{AmpError, Result},
+    notifications,
+};
 
 /// Parameters for send_selection command
 #[derive(Debug, Deserialize)]
@@ -15,7 +18,7 @@ pub struct SendSelectionParams {
     /// Start line (1-indexed)
     pub start_line: usize,
     /// End line (1-indexed)
-    pub end_line: usize,
+    pub end_line:   usize,
 }
 
 /// Response for send_selection command
@@ -50,10 +53,10 @@ pub struct SendSelectionResponse {
 /// - Returns error if buffer access fails
 /// - Returns error if notification fails to send
 pub fn send_selection(params: Value) -> Result<Value> {
-    let params: SendSelectionParams = serde_json::from_value(params)
-        .map_err(|e| AmpError::InvalidArgs {
+    let params: SendSelectionParams =
+        serde_json::from_value(params).map_err(|e| AmpError::InvalidArgs {
             command: "send_selection".to_string(),
-            reason: e.to_string(),
+            reason:  e.to_string(),
         })?;
 
     // Get current buffer
@@ -65,8 +68,13 @@ pub fn send_selection(params: Value) -> Result<Value> {
         .map_err(|e| AmpError::Other(format!("Failed to get buffer lines: {}", e)))?;
 
     // Convert nvim_oxi::String iterator to Vec<String>
+    // Use to_str() to preserve original UTF-8 without replacement characters
     let content = lines
-        .map(|s| s.to_string_lossy().to_string())
+        .map(|s| {
+            s.to_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|_| String::new())
+        })
         .collect::<Vec<String>>()
         .join("\n");
 
