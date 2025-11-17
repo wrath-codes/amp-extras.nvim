@@ -44,27 +44,32 @@ pub fn handle_connection(stream: TcpStream, expected_token: String, hub: Hub) {
             // Register client with hub
             hub.register(client_id, tx);
 
-            // Fire autocommand for client connected
-            #[cfg(not(test))]
-            super::events::notify_client_connected();
-
-            // Notify user that Amp CLI connected
+            // Notify user and fire autocommand (direct API - no scheduling)
             #[cfg(not(test))]
             {
-                let _ = crate::ide_ops::schedule_on_main_thread(|| {
-                    use nvim_oxi::api;
+                use nvim_oxi::api;
 
-                    let _ = api::notify(
-                        "Amp CLI: Connected ",
-                        api::types::LogLevel::Info,
-                        &Default::default(),
-                    );
-                });
+                // Notify user that Amp CLI connected (ignore errors)
+                let _ = api::notify(
+                    "Amp CLI: Connected ",
+                    api::types::LogLevel::Info,
+                    &Default::default(),
+                );
+
+                // Fire User autocommand (ignore errors)
+                let _ = api::exec_autocmds(
+                    vec!["User"],
+                    &api::opts::ExecAutocmdsOpts::builder()
+                        .patterns(vec!["AmpClientConnected"])
+                        .build(),
+                );
             }
 
-            // Send initial state to newly connected client
+            // Send initial state to newly connected client (skip if Neovim unavailable)
             #[cfg(not(test))]
-            send_initial_state(hub.clone());
+            if crate::ide_ops::nvim_available() {
+                send_initial_state(hub.clone());
+            }
 
             // Run message loop
             let _ = run_message_loop(websocket, rx, client_id);
@@ -72,10 +77,26 @@ pub fn handle_connection(stream: TcpStream, expected_token: String, hub: Hub) {
             // Unregister client when done
             hub.unregister(client_id);
 
-            // Fire disconnect event only if this was the last client
+            // Fire disconnect notification if this was the last client
+            // Try direct API call without scheduling (might be more stable)
             #[cfg(not(test))]
             if hub.client_count() == 0 {
-                super::events::notify_client_disconnected();
+                use nvim_oxi::api;
+
+                // Try to notify directly - ignore all errors
+                let _ = api::notify(
+                    "Amp CLI: Disconnected ",
+                    api::types::LogLevel::Info,
+                    &Default::default(),
+                );
+
+                // Fire User autocommand - ignore all errors
+                let _ = api::exec_autocmds(
+                    vec!["User"],
+                    &api::opts::ExecAutocmdsOpts::builder()
+                        .patterns(vec!["AmpClientDisconnected"])
+                        .build(),
+                );
             }
         },
         Err(_e) => {

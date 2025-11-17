@@ -14,9 +14,7 @@ crate-type = ["cdylib", "rlib"]
 nvim-oxi.workspace = true
 
 # Database
-libsql.workspace = true
 dotenvy.workspace = true
-axum.workspace = true
 rusqlite.workspace = true
 
 # Serialization
@@ -57,4 +55,3 @@ criterion = "0.7"
 proptest = "1.5"
 tempfile = "3.12"
 mockall = "0.13"
-

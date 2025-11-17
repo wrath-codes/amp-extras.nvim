@@ -25,7 +25,7 @@ pub enum AmpError {
 
     /// Database error
     #[error("Database error: {0}")]
-    DatabaseError(#[from] libsql::Error),
+    DatabaseError(#[from] rusqlite::Error),
 
     /// I/O error
     #[error("I/O error: {0}")]
@@ -300,7 +300,7 @@ mod tests {
             -32001
         );
         assert_eq!(
-            AmpError::DatabaseError(libsql::Error::Sqlite3UnsupportedStatement).to_jsonrpc_code(),
+            AmpError::DatabaseError(rusqlite::Error::InvalidQuery).to_jsonrpc_code(),
             -32002
         );
         assert_eq!(
