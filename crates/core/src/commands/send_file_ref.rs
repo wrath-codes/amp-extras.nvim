@@ -3,7 +3,7 @@
 //! Uses nvim-oxi to get current buffer path and creates a reference in the
 //! format `@file.rs`.
 
-use nvim_oxi::api::Buffer;
+use nvim_oxi::{api::Buffer, string};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -64,7 +64,7 @@ pub fn send_file_ref(_params: Value) -> Result<Value> {
         .ok_or_else(|| AmpError::Other("WebSocket server not running".into()))?;
 
     // Format reference: @file.rs
-    let reference = format!("@{}", file_path);
+    let reference = string!("@{}", file_path).to_string();
 
     // Send reference to prompt
     notifications::send_append_to_prompt(&hub, &reference)?;

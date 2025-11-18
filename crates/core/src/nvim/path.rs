@@ -26,22 +26,28 @@ use crate::errors::{AmpError, Result};
 /// // Returns: "file:///tmp/test%20file.txt"
 /// ```
 pub fn to_uri(path: &Path) -> Result<String> {
-    // Use vim.uri_from_fname for proper percent-encoding
     #[cfg(not(test))]
     {
-        use nvim_oxi::conversion::FromObject;
+        use nvim_oxi::mlua::prelude::*;
+
+        let lua = nvim_oxi::mlua::lua();
+        let vim = lua
+            .globals()
+            .get::<LuaTable>("vim")
+            .map_err(|e| AmpError::Other(format!("Failed to get vim global: {}", e)))?;
+
+        let uri_from_fname = vim
+            .get::<LuaFunction>("uri_from_fname")
+            .map_err(|e| AmpError::Other(format!("Failed to get uri_from_fname: {}", e)))?;
 
         let path_str = path.to_string_lossy();
-        let obj = api::call_function("luaeval", ("vim.uri_from_fname(_A)", path_str.as_ref()))
-            .map_err(|e| AmpError::Other(format!("Failed to call vim.uri_from_fname: {}", e)))?;
-
-        let uri: String = <String as FromObject>::from_object(obj)
-            .map_err(|e| AmpError::ConversionError(format!("Failed to convert URI: {}", e)))?;
+        let uri: String = uri_from_fname
+            .call(path_str.as_ref())
+            .map_err(|e| AmpError::Other(format!("Failed to call uri_from_fname: {}", e)))?;
 
         Ok(uri)
     }
 
-    // Test fallback - simple format
     #[cfg(test)]
     Ok(format!("file://{}", path.display()))
 }
@@ -64,21 +70,27 @@ pub fn to_uri(path: &Path) -> Result<String> {
 /// assert_eq!(path, PathBuf::from("/tmp/test file.txt"));
 /// ```
 pub fn from_uri(uri: &str) -> Result<std::path::PathBuf> {
-    // Use vim.uri_to_fname for proper URI decoding
     #[cfg(not(test))]
     {
-        use nvim_oxi::conversion::FromObject;
+        use nvim_oxi::mlua::prelude::*;
 
-        let obj = api::call_function("luaeval", ("vim.uri_to_fname(_A)", uri))
-            .map_err(|e| AmpError::Other(format!("Failed to call vim.uri_to_fname: {}", e)))?;
+        let lua = nvim_oxi::mlua::lua();
+        let vim = lua
+            .globals()
+            .get::<LuaTable>("vim")
+            .map_err(|e| AmpError::Other(format!("Failed to get vim global: {}", e)))?;
 
-        let path: String = <String as FromObject>::from_object(obj)
-            .map_err(|e| AmpError::ConversionError(format!("Failed to convert path: {}", e)))?;
+        let uri_to_fname = vim
+            .get::<LuaFunction>("uri_to_fname")
+            .map_err(|e| AmpError::Other(format!("Failed to get uri_to_fname: {}", e)))?;
+
+        let path: String = uri_to_fname
+            .call(uri)
+            .map_err(|e| AmpError::Other(format!("Failed to call uri_to_fname: {}", e)))?;
 
         Ok(std::path::PathBuf::from(path))
     }
 
-    // Test fallback - simple strip prefix
     #[cfg(test)]
     uri.strip_prefix("file://")
         .map(std::path::PathBuf::from)
@@ -108,12 +120,10 @@ pub fn from_uri(uri: &str) -> Result<std::path::PathBuf> {
 pub fn to_relative(path: &Path) -> Result<String> {
     use nvim_oxi::conversion::FromObject;
 
-    // Convert path to string
     let path_str = path
         .to_str()
         .ok_or_else(|| AmpError::Other("Invalid path encoding".into()))?;
 
-    // Check if path is empty
     if path_str.is_empty() {
         return Err(AmpError::Other("Empty path provided".into()));
     }

@@ -90,8 +90,8 @@ impl From<&str> for AmpError {
     }
 }
 
-impl From<tungstenite::Error> for AmpError {
-    fn from(err: tungstenite::Error) -> Self {
+impl From<tokio_tungstenite::tungstenite::Error> for AmpError {
+    fn from(err: tokio_tungstenite::tungstenite::Error) -> Self {
         AmpError::WebSocketError(err.to_string())
     }
 }
@@ -242,9 +242,9 @@ mod tests {
 
     #[test]
     fn test_from_tungstenite_error() {
-        // Create a tungstenite error by trying to parse invalid data
-        let ws_err = tungstenite::Error::Protocol(
-            tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+        // Create a tokio-tungstenite error
+        let ws_err = tokio_tungstenite::tungstenite::Error::Protocol(
+            tokio_tungstenite::tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
         );
         let amp_err: AmpError = ws_err.into();
 

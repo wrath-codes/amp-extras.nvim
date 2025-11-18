@@ -46,3 +46,4 @@ docs
 .env
 TURSO_STRATEGY.md
 amp-tc.sh
+MIGRATION_PLAN.md

@@ -96,7 +96,7 @@ pub fn edit_file(params: Value) -> Result<Value> {
 
     Ok(json!({
         "success": true,
-        "message": format!("Wrote {} bytes to {}", params.content.len(), params.path),
+        "message": nvim_oxi::string!("Wrote {} bytes to {}", params.content.len(), params.path).to_string(),
         "appliedChanges": true
     }))
 }

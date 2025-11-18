@@ -9,10 +9,10 @@
 
 use std::time::Duration;
 
-use tungstenite::{connect, Message};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-#[test]
-fn test_websocket_client() {
+#[tokio::test]
+async fn test_websocket_client() {
     println!("\n=== WebSocket Notification Test Client ===");
     println!("This test connects to a running WebSocket server and prints received notifications.");
     println!();
@@ -39,7 +39,7 @@ fn test_websocket_client() {
     // Connect to WebSocket server
     let url = format!("ws://127.0.0.1:{}/?auth={}", port, token);
 
-    let (mut socket, response) = connect(url).expect("Failed to connect - is the server running?");
+    let (ws_stream, response) = connect_async(url).await.expect("Failed to connect - is the server running?");
 
     println!("Connected! HTTP Status: {}", response.status());
     println!();
@@ -55,19 +55,22 @@ fn test_websocket_client() {
     // Note: set_read_timeout not available on MaybeTlsStream
     // Will use non-blocking read with timeout handling instead
 
+    use futures_util::StreamExt;
+    
+    let (_, mut read) = ws_stream.split();
+    
     let mut message_count = 0;
     let start_time = std::time::Instant::now();
     let timeout = Duration::from_secs(5); // Wait up to 5 seconds for messages
 
     // Read messages for 5 seconds or until error
-    loop {
-        // Check timeout
+    while let Some(msg_result) = tokio::time::timeout(Duration::from_millis(100), read.next()).await.ok().flatten() {
         if start_time.elapsed() > timeout && message_count == 0 {
             println!("⏱️  No messages received in {} seconds", timeout.as_secs());
             break;
         }
 
-        match socket.read() {
+        match msg_result {
             Ok(msg) => {
                 message_count += 1;
 
@@ -97,19 +100,6 @@ fn test_websocket_client() {
                     _ => {},
                 }
             },
-            Err(tungstenite::Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                // Non-blocking read would block - check if we should continue
-                if start_time.elapsed() > timeout {
-                    println!("⏱️  Timeout - no more messages");
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(100));
-                continue;
-            },
-            Err(tungstenite::Error::Io(e)) if e.kind() == std::io::ErrorKind::TimedOut => {
-                println!("⏱️  Read timeout - no more messages");
-                break;
-            },
             Err(e) => {
                 eprintln!("❌ Error: {}", e);
                 break;
@@ -122,6 +112,5 @@ fn test_websocket_client() {
     println!("Total messages received: {}", message_count);
     println!();
 
-    // Close connection
-    let _ = socket.close(None);
+    // Connection will be dropped automatically
 }

@@ -3,7 +3,7 @@
 //! Uses nvim-oxi to get current buffer path and creates a reference in the
 //! format `@file.rs#L10-L20`.
 
-use nvim_oxi::api::Buffer;
+use nvim_oxi::{api::Buffer, string};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -85,10 +85,10 @@ pub fn send_selection_ref(params: Value) -> Result<Value> {
     // Format reference: @file.rs#L10-L20
     let reference = if params.start_line == params.end_line {
         // Single line: @file.rs#L10
-        format!("@{}#L{}", file_path, params.start_line)
+        string!("@{}#L{}", file_path, params.start_line).to_string()
     } else {
         // Range: @file.rs#L10-L20
-        format!("@{}#L{}-L{}", file_path, params.start_line, params.end_line)
+        string!("@{}#L{}-L{}", file_path, params.start_line, params.end_line).to_string()
     };
 
     // Send reference to prompt

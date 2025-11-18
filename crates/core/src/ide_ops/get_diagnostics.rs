@@ -145,8 +145,10 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
             continue;
         };
 
-        // Deserialize directly from Object using conversion utility
-        let diags: Vec<NvimDiagnostic> = match crate::conversion::from_object(diag_obj) {
+        // Deserialize via serde (NvimDiagnostic doesn't implement FromObject)
+        use nvim_oxi::serde::Deserializer;
+        use serde::Deserialize;
+        let diags: Vec<NvimDiagnostic> = match Vec::<NvimDiagnostic>::deserialize(Deserializer::new(diag_obj)) {
             Ok(d) => d,
             Err(_) => continue,
         };
@@ -162,13 +164,13 @@ fn get_diagnostics_impl(path_filter: Option<&str>) -> Result<Value> {
                 Ok(obj) => obj,
                 Err(_) => {
                     // Fallback to simple format if vim.uri_from_fname fails
-                    nvim_oxi::Object::from(format!("file://{}", path_str))
+                    nvim_oxi::Object::from(nvim_oxi::string!("file://{}", path_str))
                 },
             };
 
         let uri: String = match <String as FromObject>::from_object(uri_obj) {
             Ok(u) => u,
-            Err(_) => format!("file://{}", path_str), // Fallback
+            Err(_) => nvim_oxi::string!("file://{}", path_str).to_string(), // Fallback
         };
 
         let diagnostics: Vec<Value> = diags

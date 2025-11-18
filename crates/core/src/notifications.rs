@@ -165,14 +165,14 @@ pub fn send_diagnostics_changed(hub: &Hub, entries: Vec<serde_json::Value>) -> R
 
 #[cfg(test)]
 mod tests {
-    use crossbeam_channel::unbounded;
+    use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
 
     #[test]
     fn test_send_plugin_metadata() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn test_send_selection_changed() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn test_send_visible_files_changed() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -256,8 +256,8 @@ mod tests {
     fn test_broadcast_to_multiple_clients() {
         let hub = Hub::new();
 
-        let (tx1, rx1) = unbounded();
-        let (tx2, rx2) = unbounded();
+        let (tx1, mut rx1) = unbounded_channel();
+        let (tx2, mut rx2) = unbounded_channel();
 
         let id1 = Hub::next_client_id();
         let id2 = Hub::next_client_id();
@@ -276,7 +276,7 @@ mod tests {
     #[test]
     fn test_send_user_sent_message() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn test_send_append_to_prompt() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn test_send_user_sent_message_empty() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn test_send_append_to_prompt_multiline() {
         let hub = Hub::new();
-        let (tx, rx) = unbounded();
+        let (tx, mut rx) = unbounded_channel();
         let client_id = Hub::next_client_id();
 
         hub.register(client_id, tx);
@@ -361,8 +361,8 @@ mod tests {
     fn test_user_messages_broadcast_to_all_clients() {
         let hub = Hub::new();
 
-        let (tx1, rx1) = unbounded();
-        let (tx2, rx2) = unbounded();
+        let (tx1, mut rx1) = unbounded_channel();
+        let (tx2, mut rx2) = unbounded_channel();
 
         let id1 = Hub::next_client_id();
         let id2 = Hub::next_client_id();

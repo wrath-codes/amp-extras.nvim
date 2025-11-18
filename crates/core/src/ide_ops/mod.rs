@@ -5,8 +5,6 @@
 
 use std::path::{Path, PathBuf};
 
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use nvim_oxi::libuv::AsyncHandle;
 use once_cell::sync::OnceCell;
 
 use crate::errors::{AmpError, Result};
@@ -54,113 +52,22 @@ pub(crate) fn nvim_available() -> bool {
 }
 
 // ============================================================================
-// Global AsyncHandle and Notification Channel
+// Main Thread Scheduling
 // ============================================================================
-
-/// Message to send to Neovim
-#[derive(Debug, Clone)]
-pub(super) struct NvimMessage {
-    pub message: String,
-}
-
-/// Global channel for sending messages to Neovim
-static NVIM_TX: OnceCell<Sender<NvimMessage>> = OnceCell::new();
-
-/// Global AsyncHandle for triggering Neovim callbacks
-static ASYNC_HANDLE: OnceCell<AsyncHandle> = OnceCell::new();
-
-/// Work to schedule on Neovim main thread
-type ScheduledWork = Box<dyn FnOnce() + Send>;
-
-/// Global channel for scheduling work on Neovim main thread
-static WORK_TX: OnceCell<Sender<ScheduledWork>> = OnceCell::new();
-
-/// Global AsyncHandle for scheduled work
-static WORK_HANDLE: OnceCell<AsyncHandle> = OnceCell::new();
-
-/// Get the notification channel sender
-///
-/// Used by nvim_notify to send messages to Neovim
-pub(super) fn get_nvim_tx() -> Option<&'static Sender<NvimMessage>> {
-    NVIM_TX.get()
-}
-
-/// Get the AsyncHandle for notifications
-///
-/// Used by nvim_notify to trigger the callback
-pub(super) fn get_async_handle() -> Option<&'static AsyncHandle> {
-    ASYNC_HANDLE.get()
-}
-
-/// Initialize the AsyncHandle and message channel for IDE operations
-///
-/// Must be called before starting the server to enable nvim/notify.
-pub fn init_async_handle() -> Result<()> {
-    // Initialize notification channel
-    let (tx, rx): (Sender<NvimMessage>, Receiver<NvimMessage>) = unbounded();
-
-    // Create AsyncHandle with callback that processes messages from channel
-    let handle = AsyncHandle::new(move || {
-        use nvim_oxi::{
-            api::{self, types::LogLevel},
-            Dictionary,
-        };
-
-        // Process all pending messages
-        while let Ok(msg) = rx.try_recv() {
-            // Use type-safe api::notify instead of string-based exec
-            let _ = api::notify(&msg.message, LogLevel::Info, &Dictionary::new());
-        }
-        Ok::<_, std::convert::Infallible>(())
-    })
-    .map_err(|e| AmpError::Other(format!("Failed to create AsyncHandle: {}", e)))?;
-
-    let _ = NVIM_TX.set(tx);
-    let _ = ASYNC_HANDLE.set(handle);
-
-    // Initialize work scheduler channel
-    let (work_tx, work_rx): (Sender<ScheduledWork>, Receiver<ScheduledWork>) = unbounded();
-
-    // Create AsyncHandle for scheduled work
-    let work_handle = AsyncHandle::new(move || {
-        // Process all pending work
-        while let Ok(work) = work_rx.try_recv() {
-            work();
-        }
-        Ok::<_, std::convert::Infallible>(())
-    })
-    .map_err(|e| AmpError::Other(format!("Failed to create work AsyncHandle: {}", e)))?;
-
-    let _ = WORK_TX.set(work_tx);
-    let _ = WORK_HANDLE.set(work_handle);
-
-    // Mark Neovim as ready for API calls
-    mark_nvim_ready();
-
-    Ok(())
-}
 
 /// Schedule work to run on Neovim's main thread
 ///
-/// This is used to safely call Neovim APIs from background threads.
+/// Uses nvim-oxi's built-in schedule() function for cross-thread safety.
+/// This is safe to call from any thread.
 pub fn schedule_on_main_thread<F>(work: F) -> Result<()>
 where
     F: FnOnce() + Send + 'static,
 {
-    if let Some(tx) = WORK_TX.get() {
-        if let Some(handle) = WORK_HANDLE.get() {
-            tx.send(Box::new(work))
-                .map_err(|_| AmpError::Other("Failed to send work to scheduler".into()))?;
-            handle
-                .send()
-                .map_err(|e| AmpError::Other(format!("Failed to trigger work handle: {}", e)))?;
-            Ok(())
-        } else {
-            Err(AmpError::Other("Work handle not initialized".into()))
-        }
-    } else {
-        Err(AmpError::Other("Work scheduler not initialized".into()))
-    }
+    nvim_oxi::schedule(move |_| {
+        work();
+        Ok::<_, std::convert::Infallible>(())
+    });
+    Ok(())
 }
 
 // ============================================================================

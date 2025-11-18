@@ -5,15 +5,11 @@
 //! - Autocomplete
 //! - Error conversion to Lua-friendly formats
 
-use nvim_oxi::{Dictionary, Object};
+use nvim_oxi::{serde::Deserializer, Dictionary, Object};
+use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{
-    commands,
-    conversion::{json_to_object, object_to_json},
-    errors::{AmpError, Result},
-    server,
-};
+use crate::{commands, errors::{AmpError, Result}, server};
 
 /// Main FFI entry point for command execution
 ///
@@ -27,12 +23,19 @@ use crate::{
 /// # Returns
 /// Result as JSON object, or error message
 pub fn call(command: String, args: Object) -> nvim_oxi::Result<Object> {
-    // Convert nvim-oxi Object to serde_json::Value
-    let args_value = object_to_json(args)?;
+    // Convert nvim-oxi Object to serde_json::Value using serde
+    let args_value: Value = Value::deserialize(Deserializer::new(args))
+        .map_err(nvim_oxi::Error::Deserialize)?;
 
     // Dispatch command
     match dispatch_command(&command, args_value) {
-        Ok(result) => json_to_object(result),
+        Ok(result) => {
+            // Convert serde_json::Value back to nvim-oxi Object
+            use nvim_oxi::serde::Serializer;
+            use serde::Serialize;
+            result.serialize(Serializer::new())
+                .map_err(nvim_oxi::Error::Serialize)
+        },
         Err(err) => Ok(create_error_object(&err)),
     }
 }

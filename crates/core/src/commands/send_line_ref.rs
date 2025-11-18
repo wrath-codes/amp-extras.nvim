@@ -3,7 +3,7 @@
 //! Uses nvim-oxi to get current buffer path and cursor position,
 //! creates a reference in the format `@file.rs#L10`.
 
-use nvim_oxi::api::{Buffer, Window};
+use nvim_oxi::{api::{Buffer, Window}, string};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -70,7 +70,7 @@ pub fn send_line_ref(_params: Value) -> Result<Value> {
         .ok_or_else(|| AmpError::Other("WebSocket server not running".into()))?;
 
     // Format reference: @file.rs#L10 (line is 1-indexed from nvim-oxi)
-    let reference = format!("@{}#L{}", file_path, line);
+    let reference = string!("@{}#L{}", file_path, line).to_string();
 
     // Send reference to prompt
     notifications::send_append_to_prompt(&hub, &reference)?;

@@ -7,10 +7,10 @@
 
 use std::time::Duration;
 
-use tungstenite::{connect, Error as WsError, Message};
+use tokio_tungstenite::{connect_async, tungstenite::{Error as WsError, Message}};
 
-#[test]
-fn test_auth_failure_wrong_token() {
+#[tokio::test]
+async fn test_auth_failure_wrong_token() {
     println!("\n=== Test: Authentication Failure - Wrong Token ===");
 
     // Get server info from environment
@@ -22,7 +22,7 @@ fn test_auth_failure_wrong_token() {
     let url = format!("ws://127.0.0.1:{}/?auth={}", port, wrong_token);
 
     println!("Attempting to connect with wrong token...");
-    let result = connect(url);
+    let result = connect_async(url).await;
 
     match result {
         Ok(_) => {
@@ -41,8 +41,8 @@ fn test_auth_failure_wrong_token() {
     }
 }
 
-#[test]
-fn test_auth_failure_missing_token() {
+#[tokio::test]
+async fn test_auth_failure_missing_token() {
     println!("\n=== Test: Authentication Failure - Missing Token ===");
 
     let port = std::env::var("WS_PORT").expect("Set WS_PORT environment variable");
@@ -51,7 +51,7 @@ fn test_auth_failure_missing_token() {
     let url = format!("ws://127.0.0.1:{}/", port);
 
     println!("Attempting to connect without token...");
-    let result = connect(url);
+    let result = connect_async(url).await;
 
     match result {
         Ok(_) => {
@@ -70,8 +70,10 @@ fn test_auth_failure_missing_token() {
     }
 }
 
-#[test]
-fn test_multiple_concurrent_clients() {
+#[tokio::test]
+async fn test_multiple_concurrent_clients() {
+    use futures_util::{SinkExt, StreamExt};
+
     println!("\n=== Test: Multiple Concurrent Clients ===");
 
     let port = std::env::var("WS_PORT").expect("Set WS_PORT environment variable");
@@ -81,17 +83,20 @@ fn test_multiple_concurrent_clients() {
 
     // Connect first client
     println!("Connecting client 1...");
-    let (mut client1, _) = connect(&url).expect("Client 1 should connect");
+    let (client1, _) = connect_async(&url).await.expect("Client 1 should connect");
+    let (mut write1, mut read1) = client1.split();
     println!("✅ Client 1 connected");
 
     // Connect second client
     println!("Connecting client 2...");
-    let (mut client2, _) = connect(&url).expect("Client 2 should connect");
+    let (client2, _) = connect_async(&url).await.expect("Client 2 should connect");
+    let (mut write2, _read2) = client2.split();
     println!("✅ Client 2 connected");
 
     // Connect third client
     println!("Connecting client 3...");
-    let (mut client3, _) = connect(&url).expect("Client 3 should connect");
+    let (client3, _) = connect_async(&url).await.expect("Client 3 should connect");
+    let (mut write3, _read3) = client3.split();
     println!("✅ Client 3 connected");
 
     println!("\n✅ All 3 clients connected successfully!");
@@ -99,47 +104,53 @@ fn test_multiple_concurrent_clients() {
     // Send a ping from client 1
     println!("\nSending ping from client 1...");
     let ping_request = r#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}"#;
-    client1
+    write1
         .send(Message::Text(ping_request.to_string().into()))
+        .await
         .expect("Should send ping");
 
     // Read response
-    match client1.read() {
-        Ok(Message::Text(text)) => {
+    match read1.next().await {
+        Some(Ok(Message::Text(text))) => {
             println!("Client 1 received response: {}", text);
             assert!(text.contains("pong"), "Response should contain 'pong'");
         },
-        Ok(msg) => println!("Client 1 received: {:?}", msg),
-        Err(e) => println!("Client 1 read error: {}", e),
+        Some(Ok(msg)) => println!("Client 1 received: {:?}", msg),
+        Some(Err(e)) => println!("Client 1 read error: {}", e),
+        None => println!("Client 1 connection closed"),
     }
 
     // Verify all clients can still read (non-blocking check)
     println!("\nVerifying all clients are still connected...");
 
     // Send ping to client 2
-    client2
+    write2
         .send(Message::Ping(vec![].into()))
+        .await
         .expect("Client 2 should send ping");
 
     // Send ping to client 3
-    client3
+    write3
         .send(Message::Ping(vec![].into()))
+        .await
         .expect("Client 3 should send ping");
 
     println!("✅ All clients can send messages");
 
     // Close connections
     println!("\nClosing connections...");
-    let _ = client1.close(None);
-    let _ = client2.close(None);
-    let _ = client3.close(None);
+    let _ = write1.close().await;
+    let _ = write2.close().await;
+    let _ = write3.close().await;
 
     println!("✅ Multiple concurrent clients test passed!");
 }
 
-#[test]
+#[tokio::test]
 #[ignore = "This test takes 60+ seconds to run"]
-fn test_connection_timeout() {
+async fn test_connection_timeout() {
+    use futures_util::StreamExt;
+
     println!("\n=== Test: Connection Timeout (Heartbeat) ===");
     println!("NOTE: This test takes 60+ seconds to run");
     println!("The server sends ping every 30s and times out after 60s without pong");
@@ -150,7 +161,8 @@ fn test_connection_timeout() {
     let url = format!("ws://127.0.0.1:{}/?auth={}", port, token);
 
     println!("Connecting to server...");
-    let (mut socket, _) = connect(url).expect("Should connect");
+    let (socket, _) = connect_async(url).await.expect("Should connect");
+    let (_write, mut read) = socket.split();
     println!("✅ Connected");
 
     println!("\nIgnoring all ping messages (no pong responses)...");
@@ -160,8 +172,8 @@ fn test_connection_timeout() {
     let mut received_ping = false;
 
     loop {
-        match socket.read() {
-            Ok(Message::Ping(_)) => {
+        match read.next().await {
+            Some(Ok(Message::Ping(_))) => {
                 received_ping = true;
                 println!(
                     "🏓 Received ping at {:?} (NOT sending pong)",
@@ -169,7 +181,7 @@ fn test_connection_timeout() {
                 );
                 // Intentionally NOT sending pong to trigger timeout
             },
-            Ok(Message::Close(_)) => {
+            Some(Ok(Message::Close(_))) => {
                 let elapsed = start.elapsed();
                 println!("👋 Server closed connection after {:?}", elapsed);
                 assert!(received_ping, "Should have received at least one ping");
@@ -179,17 +191,21 @@ fn test_connection_timeout() {
                 );
                 break;
             },
-            Ok(msg) => {
+            Some(Ok(msg)) => {
                 println!("Received: {:?}", msg);
             },
-            Err(WsError::ConnectionClosed) => {
+            Some(Err(WsError::ConnectionClosed)) => {
                 let elapsed = start.elapsed();
                 println!("✅ Connection closed by server after {:?}", elapsed);
                 assert!(received_ping, "Should have received at least one ping");
                 break;
             },
-            Err(e) => {
+            Some(Err(e)) => {
                 println!("Error: {}", e);
+                break;
+            },
+            None => {
+                println!("Stream ended");
                 break;
             },
         }
@@ -203,8 +219,10 @@ fn test_connection_timeout() {
     println!("✅ Connection timeout test passed!");
 }
 
-#[test]
-fn test_ping_pong_exchange() {
+#[tokio::test]
+async fn test_ping_pong_exchange() {
+    use futures_util::{SinkExt, StreamExt};
+
     println!("\n=== Test: Ping-Pong Exchange ===");
 
     let port = std::env::var("WS_PORT").expect("Set WS_PORT environment variable");
@@ -213,13 +231,15 @@ fn test_ping_pong_exchange() {
     let url = format!("ws://127.0.0.1:{}/?auth={}", port, token);
 
     println!("Connecting to server...");
-    let (mut socket, _) = connect(url).expect("Should connect");
+    let (socket, _) = connect_async(url).await.expect("Should connect");
+    let (mut write, mut read) = socket.split();
     println!("✅ Connected");
 
     // Send a ping
     println!("Sending ping to server...");
-    socket
+    write
         .send(Message::Ping(vec![1, 2, 3, 4].into()))
+        .await
         .expect("Should send ping");
 
     // Wait for pong
@@ -227,17 +247,20 @@ fn test_ping_pong_exchange() {
     let timeout = Duration::from_secs(5);
 
     loop {
-        match socket.read() {
-            Ok(Message::Pong(data)) => {
+        match read.next().await {
+            Some(Ok(Message::Pong(data))) => {
                 println!("✅ Received pong: {:?}", data);
                 assert_eq!(data, vec![1, 2, 3, 4], "Pong data should match ping data");
                 break;
             },
-            Ok(msg) => {
+            Some(Ok(msg)) => {
                 println!("Received other message: {:?}", msg);
             },
-            Err(e) => {
+            Some(Err(e)) => {
                 panic!("Error reading: {}", e);
+            },
+            None => {
+                panic!("Connection closed");
             },
         }
 

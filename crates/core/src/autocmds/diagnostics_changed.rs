@@ -157,8 +157,10 @@ fn collect_all_diagnostics() -> Result<HashMap<String, Vec<Value>>> {
             continue;
         };
 
-        // Deserialize diagnostics
-        let diags: Vec<NvimDiagnostic> = match crate::conversion::from_object(diag_obj) {
+        // Deserialize via serde (NvimDiagnostic doesn't implement FromObject)
+        use nvim_oxi::serde::Deserializer;
+        use serde::Deserialize;
+        let diags: Vec<NvimDiagnostic> = match Vec::<NvimDiagnostic>::deserialize(Deserializer::new(diag_obj)) {
             Ok(d) => d,
             Err(_) => continue,
         };

@@ -1,39 +1,40 @@
-//! WebSocket server accept loop and connection spawning
+//! WebSocket server accept loop (async with Tokio)
 
-use std::{
-    io::ErrorKind,
-    net::TcpListener,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
-use super::{connection, hub::Hub};
+use tokio::net::TcpListener;
 
-/// Start the WebSocket accept loop
+use super::{connection_async, hub::Hub};
+
+/// Run the async accept loop
 ///
-/// Binds to 127.0.0.1:0 (random port) and accepts incoming connections
-pub fn run_accept_loop(listener: TcpListener, token: String, hub: Hub, shutdown: Arc<AtomicBool>) {
-    while !shutdown.load(Ordering::Relaxed) {
-        match listener.accept() {
+/// Listens for incoming connections and spawns async tasks to handle them.
+pub async fn run_accept_loop(
+    listener: TcpListener,
+    token: String,
+    hub: Hub,
+    shutdown: Arc<AtomicBool>,
+) {
+    loop {
+        if shutdown.load(Ordering::Relaxed) {
+            break;
+        }
+
+        match listener.accept().await {
             Ok((stream, _addr)) => {
-                // Spawn connection handler thread
                 let token_clone = token.clone();
                 let hub_clone = hub.clone();
-                std::thread::spawn(move || {
-                    connection::handle_connection(stream, token_clone, hub_clone);
+
+                tokio::spawn(async move {
+                    connection_async::handle_connection(stream, token_clone, hub_clone).await;
                 });
-            },
-            Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                // No incoming connections, sleep briefly
-                std::thread::sleep(Duration::from_millis(25));
-            },
-            Err(_e) => {
-                // Accept error - sleep and continue (connection handler will log errors)
-                std::thread::sleep(Duration::from_millis(100));
-            },
+            }
+            Err(_) => {
+                // Accept error, continue
+            }
         }
     }
 }

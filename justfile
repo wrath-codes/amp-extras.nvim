@@ -67,7 +67,6 @@ test-unit-safe:
     @cargo test --package amp_extras_core --lib commands::
     @cargo test --package amp_extras_core --lib notifications::
     @cargo test --package amp_extras_core --lib errors::
-    @cargo test --package amp_extras_core --lib conversion::
     @cargo test --package amp_extras_core --lib rpc::
     @cargo test --package amp_extras_core --lib lockfile::
     @echo "✓ Unit tests passed!"

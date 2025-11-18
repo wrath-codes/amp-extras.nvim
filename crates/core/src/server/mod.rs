@@ -3,7 +3,8 @@
 //! This module implements a WebSocket server that listens on a random port,
 //! writes lockfiles with auth tokens, and accepts connections from Amp CLI.
 
-mod connection;
+mod connection_async;
+mod event_bridge;
 mod events;
 mod hub;
 mod ws_server;
@@ -55,8 +56,6 @@ static SERVER: Lazy<Mutex<Option<ServerHandle>>> = Lazy::new(|| Mutex::new(None)
 ///
 /// Returns (port, token, lockfile_path)
 pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
-    // Initialize AsyncHandle for IDE operations (nvim/notify)
-    crate::ide_ops::init_async_handle()?;
     let mut server = SERVER.lock().unwrap();
 
     if server.is_some() {
@@ -65,9 +64,17 @@ pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
         ));
     }
 
-    // Bind to random port
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    listener.set_nonblocking(true)?;
+    // Initialize event bridge for Tokio -> main thread communication
+    event_bridge::init()?;
+    
+    // Create Tokio runtime
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    // Bind to random port (async)
+    let listener = runtime.block_on(async { tokio::net::TcpListener::bind("127.0.0.1:0").await })?;
+
     let port = listener.local_addr()?.port();
 
     // Generate token and write lockfile
@@ -77,14 +84,16 @@ pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
     // Create hub for client management
     let hub = Hub::new();
 
-    // Spawn server thread
+    // Spawn server thread with Tokio runtime
     let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_clone = Arc::clone(&shutdown);
     let token_clone = token.clone();
     let hub_clone = hub.clone();
 
     let join_handle = std::thread::spawn(move || {
-        ws_server::run_accept_loop(listener, token_clone, hub_clone, shutdown_clone);
+        runtime.block_on(async {
+            ws_server::run_accept_loop(listener, token_clone, hub_clone, shutdown_clone).await;
+        });
     });
 
     // Store server handle
@@ -97,6 +106,9 @@ pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
     };
 
     *server = Some(handle);
+
+    // Mark Neovim as ready for API calls
+    crate::ide_ops::mark_nvim_ready();
 
     // Fire server started event
     #[cfg(not(test))]
@@ -127,6 +139,8 @@ pub fn is_running() -> bool {
         .map(|h| !h.shutdown.load(Ordering::Relaxed))
         .unwrap_or(false)
 }
+
+
 
 /// Get the Hub instance (if server is running)
 ///

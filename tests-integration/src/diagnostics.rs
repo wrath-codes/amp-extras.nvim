@@ -6,9 +6,7 @@ use serde_json::json;
 
 #[nvim_oxi::test]
 fn test_diagnostics_with_errors() {
-    // Initialize async handle so nvim_available() returns true
-    let _ = amp_extras::ide_ops::init_async_handle();
-
+    amp_extras::ide_ops::mark_nvim_ready();
     // Create buffer with explicit name
     let ns = api::create_namespace("amp_extras_tests");
     let mut buf = api::create_buf(true, false).unwrap();
@@ -46,9 +44,7 @@ fn test_diagnostics_with_errors() {
 
 #[nvim_oxi::test]
 fn test_diagnostics_filters_by_path() {
-    // Initialize async handle so nvim_available() returns true
-    let _ = amp_extras::ide_ops::init_async_handle();
-
+    amp_extras::ide_ops::mark_nvim_ready();
     // Create buffer with explicit name
     let ns = api::create_namespace("amp_test_filter_path");
     let mut buf = api::create_buf(true, false).unwrap();
@@ -94,9 +90,7 @@ fn test_diagnostics_filters_by_path() {
 
 #[nvim_oxi::test]
 fn test_diagnostics_multiple_buffers() {
-    // Initialize async handle so nvim_available() returns true
-    let _ = amp_extras::ide_ops::init_async_handle();
-
+    amp_extras::ide_ops::mark_nvim_ready();
     let ns = api::create_namespace("amp_extras_tests");
 
     // Create first buffer with diagnostic
@@ -129,9 +123,7 @@ fn test_diagnostics_multiple_buffers() {
 
 #[nvim_oxi::test]
 fn test_diagnostics_severity_mapping() {
-    // Initialize async handle so nvim_available() returns true
-    let _ = amp_extras::ide_ops::init_async_handle();
-
+    amp_extras::ide_ops::mark_nvim_ready();
     let ns = api::create_namespace("amp_extras_tests");
     let mut buf = api::create_buf(true, false).unwrap();
     api::set_current_buf(&buf).unwrap();

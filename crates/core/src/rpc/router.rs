@@ -354,15 +354,8 @@ mod tests {
     fn test_route_nvim_notify() {
         let result = route_method("nvim/notify", json!({"message": "test"}));
 
-        // Will fail because AsyncHandle not initialized in tests
-        // This is expected - test through integration tests
-        assert!(result.is_err());
-        match result {
-            Err(AmpError::Other(msg)) => {
-                assert!(msg.contains("AsyncHandle not initialized"));
-            },
-            _ => panic!("Expected 'AsyncHandle not initialized' error"),
-        }
+        // In tests, schedule() is skipped with #[cfg(not(test))], so this succeeds
+        assert!(result.is_ok());
     }
 
     #[test]

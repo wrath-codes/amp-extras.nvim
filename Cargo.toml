@@ -11,7 +11,11 @@ repository = "https://github.com/wrath-codes/amp-extras-rs"
 
 [workspace.dependencies]
 # Neovim integration
-nvim-oxi = { version = "0.6", features = ["neovim-0-10", "libuv"] }
+nvim-oxi = { version = "0.6", features = [
+  "neovim-0-10",
+  "libuv",
+  "mlua",
+] }
 
 # Database
 dotenvy = "0.15"
@@ -42,11 +46,20 @@ dirs = "6.0"
 crossbeam = "0.8"
 walkdir = "2.5"
 
+# Async runtime
+tokio = { version = "1.48", features = [
+  "rt-multi-thread",
+  "net",
+  "sync",
+  "time",
+  "macros",
+] }
+
 # WebSocket server
-tungstenite = { version = "0.28", default-features = true }
+tokio-tungstenite = "0.28"
+futures-util = "0.3"
 url = "2.5"
 rand = "0.9"
-crossbeam-channel = "0.5"
 subtle = "2.6"
 http = "1.3"
 

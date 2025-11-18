@@ -19,7 +19,6 @@
 // Module declarations
 pub mod autocmds;
 pub mod commands;
-pub mod conversion;
 pub mod db;
 pub mod errors;
 pub mod ffi;
