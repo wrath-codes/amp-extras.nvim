@@ -129,4 +129,19 @@ function M.send_to_prompt(message)
   return result
 end
 
+-- ============================================================================
+-- Plugin Setup Interface
+-- ============================================================================
+
+--- Setup the plugin with configuration
+---
+--- Registers VimEnter autocommand if auto_start is enabled.
+---
+---@param config table Configuration options
+---   - auto_start (boolean): Auto-start server on VimEnter
+---@return table result Success status or error object
+function M.setup(config)
+  return ffi.setup(config or {})
+end
+
 return M

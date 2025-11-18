@@ -27,6 +27,7 @@ pub mod lockfile;
 pub mod notifications;
 pub mod nvim;
 pub mod rpc;
+pub mod runtime;
 pub mod server;
 pub mod util;
 
@@ -181,6 +182,23 @@ fn register_commands() -> nvim_oxi::Result<()> {
 
     // Server commands
     let opts = CreateCommandOpts::builder()
+        .desc("Update Amp CLI")
+        .build();
+    api::create_user_command(
+        "AmpUpdate",
+        |_| -> nvim_oxi::Result<()> {
+            match commands::dispatch("account.update", json!({})) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    api::err_writeln(&format!("AmpUpdate error: {}", e));
+                    Ok(())
+                },
+            }
+        },
+        &opts,
+    )?;
+
+    let opts = CreateCommandOpts::builder()
         .desc("Start the Amp WebSocket server")
         .build();
     api::create_user_command(
@@ -280,6 +298,10 @@ fn amp_extras_core() -> nvim_oxi::Result<Dictionary> {
     exports.insert(
         "send_to_prompt",
         Function::<String, Object>::from_fn(send_to_prompt_wrapper),
+    );
+    exports.insert(
+        "setup",
+        Function::<Object, Object>::from_fn(|config| ffi::setup(config)),
     );
 
     Ok(exports)

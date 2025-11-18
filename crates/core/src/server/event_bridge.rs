@@ -16,6 +16,14 @@ pub enum ServerEvent {
     ClientConnected,
     ClientDisconnected,
     SendInitialState(Hub),
+    LogMessage(String, LogLevel),
+}
+
+#[derive(Debug, Clone)]
+pub enum LogLevel {
+    Info,
+    Warn,
+    Error,
 }
 
 static EVENT_BRIDGE: OnceLock<(UnboundedSender<ServerEvent>, AsyncHandle)> = OnceLock::new();
@@ -67,7 +75,25 @@ fn process_event(event: ServerEvent) {
             #[cfg(not(test))]
             send_initial_state_sync(hub);
         }
+        ServerEvent::LogMessage(msg, level) => {
+            #[cfg(not(test))]
+            log_message_sync(msg, level);
+        }
     }
+}
+
+/// Log message to Neovim (synchronous)
+#[cfg(not(test))]
+fn log_message_sync(msg: String, level: LogLevel) {
+    use nvim_oxi::print;
+    // You might want to map this to vim.notify with levels
+    // For now, simple print with prefix
+    let prefix = match level {
+        LogLevel::Info => "Amp Info:",
+        LogLevel::Warn => "Amp Warn:",
+        LogLevel::Error => "Amp Error:",
+    };
+    print!("{} {}", prefix, msg);
 }
 
 /// Send initial state notifications (synchronous version for main thread)

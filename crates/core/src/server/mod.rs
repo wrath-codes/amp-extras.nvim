@@ -4,7 +4,7 @@
 //! writes lockfiles with auth tokens, and accepts connections from Amp CLI.
 
 mod connection_async;
-mod event_bridge;
+pub mod event_bridge;
 mod events;
 mod hub;
 mod ws_server;
@@ -67,10 +67,8 @@ pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
     // Initialize event bridge for Tokio -> main thread communication
     event_bridge::init()?;
     
-    // Create Tokio runtime
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
+    // Use global runtime
+    let runtime = &crate::runtime::RUNTIME;
 
     // Bind to random port (async)
     let listener = runtime.block_on(async { tokio::net::TcpListener::bind("127.0.0.1:0").await })?;
@@ -91,7 +89,7 @@ pub fn start() -> crate::errors::Result<(u16, String, PathBuf)> {
     let hub_clone = hub.clone();
 
     let join_handle = std::thread::spawn(move || {
-        runtime.block_on(async {
+        crate::runtime::block_on(async {
             ws_server::run_accept_loop(listener, token_clone, hub_clone, shutdown_clone).await;
         });
     });

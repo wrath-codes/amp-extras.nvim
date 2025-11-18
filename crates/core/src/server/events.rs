@@ -5,7 +5,10 @@
 /// Fire autocmd when a client connects (from main thread)
 #[cfg(not(test))]
 pub(super) fn notify_client_connected_sync() {
-    use nvim_oxi::api;
+    use nvim_oxi::{api, print};
+
+    // Notify user with print!
+    print!("Amp CLI:  Connected");
 
     // Fire User autocommand
     let _ = api::exec_autocmds(
@@ -22,7 +25,7 @@ pub(super) fn notify_client_disconnected_sync() {
     use nvim_oxi::{api, print};
 
     // Notify user with print! instead of api::notify (deprecated)
-    print!("Amp CLI: Disconnected");
+    print!("Amp CLI:  Disconnected");
 
     // Fire User autocommand (ignore errors - best effort)
     let _ = api::exec_autocmds(

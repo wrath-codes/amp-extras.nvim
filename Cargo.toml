@@ -11,11 +11,7 @@ repository = "https://github.com/wrath-codes/amp-extras-rs"
 
 [workspace.dependencies]
 # Neovim integration
-nvim-oxi = { version = "0.6", features = [
-  "neovim-0-10",
-  "libuv",
-  "mlua",
-] }
+nvim-oxi = { version = "0.6", features = ["neovim-0-10", "libuv", "mlua"] }
 
 # Database
 dotenvy = "0.15"
@@ -53,6 +49,9 @@ tokio = { version = "1.48", features = [
   "sync",
   "time",
   "macros",
+  "fs",
+  "signal",
+  "process",
 ] }
 
 # WebSocket server

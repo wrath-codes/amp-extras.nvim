@@ -13,12 +13,15 @@
 //! 3. Add tests for the command
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 
 use once_cell::sync::Lazy;
 use serde_json::Value;
 
 use crate::errors::{AmpError, Result};
 
+mod account_update;
 mod send_buffer;
 mod send_file_ref;
 mod send_line_ref;
@@ -31,6 +34,9 @@ mod server_status;
 /// All command handlers take a JSON Value (arguments) and return a
 /// Result<Value>
 pub type CommandHandler = fn(Value) -> Result<Value>;
+
+/// Type alias for async command handler functions
+pub type AsyncCommandHandler = fn(Value) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 /// Static command registry
 ///
@@ -69,6 +75,18 @@ static REGISTRY: Lazy<HashMap<&'static str, CommandHandler>> = Lazy::new(|| {
     map
 });
 
+/// Static async command registry
+static ASYNC_REGISTRY: Lazy<HashMap<&'static str, AsyncCommandHandler>> = Lazy::new(|| {
+    let mut map = HashMap::new();
+
+    map.insert(
+        "account.update",
+        account_update::account_update as AsyncCommandHandler,
+    );
+
+    map
+});
+
 /// Dispatch a command by name
 ///
 /// Looks up the command in the registry and executes it with the provided
@@ -81,17 +99,42 @@ static REGISTRY: Lazy<HashMap<&'static str, CommandHandler>> = Lazy::new(|| {
 /// # Returns
 /// Command result as JSON Value, or error if command not found
 pub fn dispatch(command: &str, args: Value) -> Result<Value> {
-    match REGISTRY.get(command) {
-        Some(handler) => handler(args),
-        None => Err(AmpError::CommandNotFound(command.to_string())),
+    // Try sync registry first
+    if let Some(handler) = REGISTRY.get(command) {
+        return handler(args);
     }
+
+    // Try async registry
+    if let Some(handler) = ASYNC_REGISTRY.get(command) {
+        let future = handler(args);
+        
+        // Spawn async task on global runtime
+        crate::runtime::spawn(async move {
+            if let Err(e) = future.await {
+                // Report error via event bridge
+                 let _ = crate::server::event_bridge::send_event(
+                    crate::server::event_bridge::ServerEvent::LogMessage(
+                        format!("Async command failed: {}", e),
+                        crate::server::event_bridge::LogLevel::Error
+                    )
+                );
+            }
+        });
+
+        return Ok(serde_json::json!({
+            "started": true,
+            "async": true
+        }));
+    }
+
+    Err(AmpError::CommandNotFound(command.to_string()))
 }
 
 /// List all available commands
 ///
 /// Returns a sorted list of all registered command names.
 pub fn list_commands() -> Vec<String> {
-    let mut commands: Vec<String> = REGISTRY.keys().map(|&k| k.to_string()).collect();
+    let mut commands: Vec<String> = REGISTRY.keys().chain(ASYNC_REGISTRY.keys()).map(|&k| k.to_string()).collect();
     commands.sort();
     commands
 }

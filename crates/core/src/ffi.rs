@@ -5,11 +5,30 @@
 //! - Autocomplete
 //! - Error conversion to Lua-friendly formats
 
+use std::sync::OnceLock;
+
 use nvim_oxi::{serde::Deserializer, Dictionary, Object};
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{commands, errors::{AmpError, Result}, server};
+
+/// Plugin configuration
+#[derive(Debug, Clone, Deserialize)]
+struct Config {
+    /// Auto-start the WebSocket server on VimEnter
+    #[serde(default)]
+    auto_start: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { auto_start: false }
+    }
+}
+
+/// Global config storage
+static CONFIG: OnceLock<Config> = OnceLock::new();
 
 /// Main FFI entry point for command execution
 ///
@@ -58,6 +77,54 @@ pub fn autocomplete(kind: String, prefix: String) -> nvim_oxi::Result<Vec<String
             Ok(vec![])
         },
     }
+}
+
+// ============================================================================
+// Plugin Setup
+// ============================================================================
+
+/// Setup the plugin with configuration
+///
+/// Called from Lua as: `ffi.setup({auto_start = true})`
+///
+/// Returns:
+/// ```lua
+/// { success = true }
+/// ```
+/// Or on error:
+/// ```lua
+/// {
+///   error = true,
+///   message = "Error description"
+/// }
+/// ```
+pub fn setup(config_obj: Object) -> nvim_oxi::Result<Object> {
+    // Deserialize config from Lua
+    let config: Config = Config::deserialize(Deserializer::new(config_obj))
+        .unwrap_or_default();
+
+    // Register VimEnter autocommand if auto_start is enabled
+    if config.auto_start {
+        use nvim_oxi::api::{self, opts::CreateAutocmdOpts};
+
+        let _ = api::create_autocmd(
+            vec!["VimEnter"],
+            &CreateAutocmdOpts::builder()
+                .patterns(vec!["*"])
+                .callback(|_| {
+                    // Auto-start the server on VimEnter
+                    let _ = server::start();
+                    Ok::<bool, nvim_oxi::Error>(false)
+                })
+                .build(),
+        );
+    }
+
+    // Store config (first call wins)
+    let _ = CONFIG.set(config);
+
+    let result = Dictionary::from_iter([("success", Object::from(true))]);
+    Ok(Object::from(result))
 }
 
 // ============================================================================

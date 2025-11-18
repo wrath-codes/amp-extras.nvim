@@ -29,19 +29,41 @@ M.send_to_prompt = ffi.send_to_prompt
 local defaults = {
   auto_start = true, -- Auto-start server on setup
   lazy = false, -- Lazy load the plugin
+  prefix = "<leader>a", -- Prefix for all default keymaps
+
+  -- Keymap configuration
+  -- Set to false to disable all keymaps
+  -- Set specific keys to false to disable individual keymaps
+  -- Set specific keys to string to override default mapping
   keymaps = {
-    -- Send commands (set to false to disable)
-    send_selection = "<leader>ash", -- Send selection content (visual)
-    send_selection_ref = "<leader>asl", -- Send selection reference (visual)
-    send_buffer = "<leader>asb", -- Send buffer content
-    send_file_ref = "<leader>asf", -- Send file reference
-    send_line_ref = "<leader>asr", -- Send line reference
-    send_message = "<leader>asm", -- Send message UI
-    -- Server commands (set to false to disable)
-    server_start = "<leader>axs", -- Start WebSocket server
-    server_stop = "<leader>axx", -- Stop WebSocket server
-    server_status = "<leader>axc", -- Server status
+    -- Send commands
+    send_selection = true, -- default: prefix .. "sh"
+    send_selection_ref = true, -- default: prefix .. "sl"
+    send_buffer = true, -- default: prefix .. "sb"
+    send_file_ref = true, -- default: prefix .. "sf"
+    send_line_ref = true, -- default: prefix .. "sr"
+    send_message = true, -- default: prefix .. "sm"
+
+    -- Server commands
+    server_start = true, -- default: prefix .. "xs"
+    server_stop = true, -- default: prefix .. "xx"
+    server_status = true, -- default: prefix .. "xc"
+    update = true, -- default: prefix .. "u"
   },
+}
+
+-- Default suffixes for keymaps
+local default_suffixes = {
+  send_selection = "sh",
+  send_selection_ref = "sl",
+  send_buffer = "sb",
+  send_file_ref = "sf",
+  send_line_ref = "sr",
+  send_message = "sm",
+  server_start = "xs",
+  server_stop = "xx",
+  server_status = "xc",
+  update = "u",
 }
 
 -- Active configuration (merged defaults + user config)
@@ -103,93 +125,77 @@ end
 -- Setup & Configuration
 -- ============================================================================
 
+--- Resolve keymap: user_val -> final_lhs or nil
+---@param action string Action name (e.g. "send_selection")
+---@param user_val boolean|string|nil User config value for this action
+---@param prefix string Global prefix
+---@return string|nil lhs The resolved keymap string, or nil if disabled
+local function resolve_keymap(action, user_val, prefix)
+  if user_val == false then
+    return nil
+  end
+
+  if type(user_val) == "string" then
+    return user_val
+  end
+
+  if user_val == true or user_val == nil then
+    local suffix = default_suffixes[action]
+    if suffix then
+      return prefix .. suffix
+    end
+  end
+
+  return nil
+end
+
 --- Setup keymaps
----@param keymaps table Keymap configuration
-local function setup_keymaps(keymaps)
+---@param config table Full configuration table
+local function setup_keymaps(config)
+  local keymaps = config.keymaps
+  local prefix = config.prefix
+
   if not keymaps or keymaps == false then
     return
   end
 
-  -- Send selection (visual mode)
-  if keymaps.send_selection then
-    vim.keymap.set("v", keymaps.send_selection, ":'<,'>AmpSendSelection<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Send Selection (Content)",
-    })
+  -- Helper to map if resolved
+  local function map(action, mode, rhs, desc)
+    local lhs = resolve_keymap(action, keymaps[action], prefix)
+    if lhs then
+      vim.keymap.set(mode, lhs, rhs, {
+        noremap = true,
+        silent = true,
+        desc = desc,
+      })
+    end
   end
+
+  -- Send selection (visual mode)
+  map("send_selection", "v", ":'<,'>AmpSendSelection<cr>", "Amp: Send Selection (Content)")
 
   -- Send selection reference (visual mode)
-  if keymaps.send_selection_ref then
-    vim.keymap.set("v", keymaps.send_selection_ref, ":'<,'>AmpSendSelectionRef<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Send Selection (Ref)",
-    })
-  end
+  map("send_selection_ref", "v", ":'<,'>AmpSendSelectionRef<cr>", "Amp: Send Selection (Ref)")
 
   -- Send buffer (normal mode)
-  if keymaps.send_buffer then
-    vim.keymap.set("n", keymaps.send_buffer, "<cmd>AmpSendBuffer<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Send Buffer (Content)",
-    })
-  end
+  map("send_buffer", "n", "<cmd>AmpSendBuffer<cr>", "Amp: Send Buffer (Content)")
 
   -- Send file reference (normal mode)
-  if keymaps.send_file_ref then
-    vim.keymap.set("n", keymaps.send_file_ref, "<cmd>AmpSendFileRef<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Send File (Ref)",
-    })
-  end
+  map("send_file_ref", "n", "<cmd>AmpSendFileRef<cr>", "Amp: Send File (Ref)")
 
   -- Send line reference (normal mode)
-  if keymaps.send_line_ref then
-    vim.keymap.set("n", keymaps.send_line_ref, "<cmd>AmpSendLineRef<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Send Line (Ref)",
-    })
-  end
-
-  -- Server start
-  if keymaps.server_start then
-    vim.keymap.set("n", keymaps.server_start, "<cmd>AmpServerStart<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Start Server",
-    })
-  end
-
-  -- Server stop
-  if keymaps.server_stop then
-    vim.keymap.set("n", keymaps.server_stop, "<cmd>AmpServerStop<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Stop Server",
-    })
-  end
-
-  -- Server status
-  if keymaps.server_status then
-    vim.keymap.set("n", keymaps.server_status, "<cmd>AmpServerStatus<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Server Status",
-    })
-  end
+  map("send_line_ref", "n", "<cmd>AmpSendLineRef<cr>", "Amp: Send Line (Ref)")
 
   -- Send message UI
-  if keymaps.send_message then
-    vim.keymap.set("n", keymaps.send_message, "<cmd>AmpSendMessage<cr>", {
-      noremap = true,
-      silent = true,
-      desc = "Amp: Send Message UI",
-    })
-  end
+  map("send_message", "n", "<cmd>AmpSendMessage<cr>", "Amp: Send Message UI")
+
+  -- Server commands
+  map("server_start", "n", "<cmd>AmpServerStart<cr>", "Amp: Start Server")
+  map("server_stop", "n", "<cmd>AmpServerStop<cr>", "Amp: Stop Server")
+  map("server_status", "n", "<cmd>AmpServerStatus<cr>", "Amp: Server Status")
+
+  -- Update
+  map("update", "n", "<cmd>AmpUpdate<cr>", "Amp: Update CLI")
 end
 
 --- Setup amp-extras plugin
@@ -200,31 +206,25 @@ end
 ---@param opts table|nil User configuration options
 ---   - auto_start (boolean): Auto-start server on setup (default: true)
 ---   - lazy (boolean): Lazy load the plugin (default: false)
+---   - prefix (string): Prefix for default keymaps (default: "<leader>a")
 ---   - keymaps (table|false): Keymap configuration (set to false to disable all)
 ---@return table Configuration
 function M.setup(opts)
   -- Merge user config with defaults
   opts = opts or {}
-  M.config = vim.tbl_deep_extend("force", defaults, opts)
+  sM.config = vim.tbl_deep_extend("force", defaults, opts)
 
-  -- Auto-start server if enabled
-  if M.config.auto_start and not M.server_is_running() then
-    local result, err = M.server_start()
-    if not result then
-      vim.notify(
-        "amp-extras: Failed to start server: " .. (err or "unknown error"),
-        vim.log.levels.ERROR
-      )
-    else
-      vim.notify("amp-extras: Server started on port " .. result.port, vim.log.levels.INFO)
-
-      -- Setup notifications (cursor/selection tracking)
-      M.setup_notifications()
-    end
+  -- Call Rust FFI setup to register VimEnter autocommand if auto_start is enabled
+  local setup_result = ffi.setup({ auto_start = M.config.auto_start })
+  if setup_result and setup_result.error then
+    vim.notify(
+      "amp-extras: FFI setup failed: " .. (setup_result.message or "unknown error"),
+      vim.log.levels.ERROR
+    )
   end
 
   -- Setup keymaps
-  setup_keymaps(M.config.keymaps)
+  setup_keymaps(M.config)
 
   -- Register UI commands
   M.register_ui_commands()
