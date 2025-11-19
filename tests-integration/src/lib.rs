@@ -3,5 +3,3 @@
 //! These tests run in a real Neovim instance using nvim-oxi's test framework.
 
 mod commands;
-mod diagnostics;
-mod uri;

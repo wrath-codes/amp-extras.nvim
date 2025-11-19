@@ -4,30 +4,12 @@ local M = {}
 -- Load FFI module (separated for cleaner integration with UI commands)
 local ffi = require("amp_extras.ffi")
 
--- ============================================================================
--- State Table (mirrors amp.nvim pattern)
--- ============================================================================
-
---- Server state (updated by get_status)
-M.state = {
-  running = false,
-  port = nil,
-  clients = 0,
-}
-
 -- Expose FFI methods on M for backward compatibility
 M.call = ffi.call
-M.server_start = ffi.server_start
-M.server_stop = ffi.server_stop
-M.server_is_running = ffi.server_is_running
-M.setup_notifications = ffi.setup_notifications
 M.autocomplete = ffi.autocomplete
-M.send_user_message = ffi.send_user_message
-M.send_to_prompt = ffi.send_to_prompt
 
 -- Default configuration
 local defaults = {
-  auto_start = true, -- Auto-start server on setup
   lazy = false, -- Lazy load the plugin
   prefix = "<leader>a", -- Prefix for all default keymaps
 
@@ -43,12 +25,6 @@ local defaults = {
     send_file_ref = true, -- default: prefix .. "sf"
     send_line_ref = true, -- default: prefix .. "sr"
     send_message = true, -- default: prefix .. "sm"
-
-    -- Server commands
-    server_start = true, -- default: prefix .. "xs"
-    server_stop = true, -- default: prefix .. "xx"
-    server_status = true, -- default: prefix .. "xc"
-    update = true, -- default: prefix .. "u"
   },
 }
 
@@ -60,66 +36,10 @@ local default_suffixes = {
   send_file_ref = "sf",
   send_line_ref = "sr",
   send_message = "sm",
-  server_start = "xs",
-  server_stop = "xx",
-  server_status = "xc",
-  update = "u",
 }
 
 -- Active configuration (merged defaults + user config)
 M.config = vim.deepcopy(defaults)
-
--- ============================================================================
--- Server Status API
--- ============================================================================
-
---- Get server status and update state table
----
---- Calls the Rust server.status command and updates M.state.
---- Can return either a table or a formatted string for statusline.
----
----@param opts? table Options
----   - return_string (boolean): Return formatted string instead of table
----@return table|string status Server status (or formatted string if return_string=true)
-function M.get_status(opts)
-  opts = opts or {}
-
-  -- Call Rust command
-  local ok, res = pcall(ffi.call, "server.status", {})
-  if ok and type(res) == "table" then
-    M.state.running = res.running or false
-    M.state.port = res.port
-    M.state.clients = res.clients or 0
-  else
-    M.state.running = false
-    M.state.port = nil
-    M.state.clients = 0
-  end
-
-  -- Return formatted string for statusline
-  if opts.return_string then
-    if M.state.running then
-      local port = M.state.port or 0
-      local clients = M.state.clients or 0
-      return string.format("Amp:%d[%d]", port, clients)
-    else
-      return "Amp:off"
-    end
-  end
-
-  -- Return copy of state table
-  return vim.deepcopy(M.state)
-end
-
---- Simple statusline component
----
---- Returns formatted status string suitable for statusline/lualine.
---- Format: "Amp:PORT[CLIENTS]" when running, "Amp:off" when stopped.
----
----@return string Formatted status string
-function M.statusline_component()
-  return M.get_status({ return_string = true })
-end
 
 -- ============================================================================
 -- Setup & Configuration
@@ -188,23 +108,13 @@ local function setup_keymaps(config)
 
   -- Send message UI
   map("send_message", "n", "<cmd>AmpSendMessage<cr>", "Amp: Send Message UI")
-
-  -- Server commands
-  map("server_start", "n", "<cmd>AmpServerStart<cr>", "Amp: Start Server")
-  map("server_stop", "n", "<cmd>AmpServerStop<cr>", "Amp: Stop Server")
-  map("server_status", "n", "<cmd>AmpServerStatus<cr>", "Amp: Server Status")
-
-  -- Update
-  map("update", "n", "<cmd>AmpUpdate<cr>", "Amp: Update CLI")
 end
 
 --- Setup amp-extras plugin
 ---
 --- Merges user configuration with defaults and initializes the plugin.
---- If auto_start is true, starts the WebSocket server automatically.
 ---
 ---@param opts table|nil User configuration options
----   - auto_start (boolean): Auto-start server on setup (default: true)
 ---   - lazy (boolean): Lazy load the plugin (default: false)
 ---   - prefix (string): Prefix for default keymaps (default: "<leader>a")
 ---   - keymaps (table|false): Keymap configuration (set to false to disable all)
@@ -212,10 +122,10 @@ end
 function M.setup(opts)
   -- Merge user config with defaults
   opts = opts or {}
-  sM.config = vim.tbl_deep_extend("force", defaults, opts)
+  M.config = vim.tbl_deep_extend("force", defaults, opts)
 
-  -- Call Rust FFI setup to register VimEnter autocommand if auto_start is enabled
-  local setup_result = ffi.setup({ auto_start = M.config.auto_start })
+  -- Call Rust FFI setup
+  local setup_result = ffi.setup({})
   if setup_result and setup_result.error then
     vim.notify(
       "amp-extras: FFI setup failed: " .. (setup_result.message or "unknown error"),

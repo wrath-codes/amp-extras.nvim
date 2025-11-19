@@ -90,9 +90,6 @@ end
 
 local M = {}
 
--- Load FFI module at module level (not inside function)
-local ffi = require("amp_extras.ffi")
-
 -- Send message to agent
 M.command = function()
   local n = require("nui-components")
@@ -114,7 +111,7 @@ M.command = function()
       placeholder = "Type your message to Amp...",
       border_label = {
         text = "Amp Message",
-        icon = "󰄾",
+        icon = "󰶼",
         edge = "top",
         align = "left",
       },
@@ -136,7 +133,12 @@ M.command = function()
       end,
       on_submit = function(value)
         -- Send the value as-is (preserves newlines from Shift+Enter)
-        ffi.send_user_message(value)
+        local ok, amp_message = pcall(require, "amp.message")
+        if ok then
+          amp_message.send_message(value)
+        else
+          vim.notify("amp.nvim not found", vim.log.levels.ERROR)
+        end
         renderer:close()
       end,
       window = {

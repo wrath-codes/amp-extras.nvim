@@ -11,19 +11,18 @@ use nvim_oxi::{serde::Deserializer, Dictionary, Object};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{commands, errors::{AmpError, Result}, server};
+use crate::{commands, errors::{AmpError, Result}};
 
 /// Plugin configuration
 #[derive(Debug, Clone, Deserialize)]
 struct Config {
-    /// Auto-start the WebSocket server on VimEnter
-    #[serde(default)]
-    auto_start: bool,
+    // Add configuration fields here if needed in the future
+    // Previously had auto_start for server
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { auto_start: false }
+        Self {}
     }
 }
 
@@ -85,7 +84,7 @@ pub fn autocomplete(kind: String, prefix: String) -> nvim_oxi::Result<Vec<String
 
 /// Setup the plugin with configuration
 ///
-/// Called from Lua as: `ffi.setup({auto_start = true})`
+/// Called from Lua as: `ffi.setup({})`
 ///
 /// Returns:
 /// ```lua
@@ -103,284 +102,11 @@ pub fn setup(config_obj: Object) -> nvim_oxi::Result<Object> {
     let config: Config = Config::deserialize(Deserializer::new(config_obj))
         .unwrap_or_default();
 
-    // Register VimEnter autocommand if auto_start is enabled
-    if config.auto_start {
-        use nvim_oxi::api::{self, opts::CreateAutocmdOpts};
-
-        let _ = api::create_autocmd(
-            vec!["VimEnter"],
-            &CreateAutocmdOpts::builder()
-                .patterns(vec!["*"])
-                .callback(|_| {
-                    // Auto-start the server on VimEnter
-                    let _ = server::start();
-                    Ok::<bool, nvim_oxi::Error>(false)
-                })
-                .build(),
-        );
-    }
-
     // Store config (first call wins)
     let _ = CONFIG.set(config);
 
     let result = Dictionary::from_iter([("success", Object::from(true))]);
     Ok(Object::from(result))
-}
-
-// ============================================================================
-// WebSocket Server FFI
-// ============================================================================
-
-/// Start the WebSocket server
-///
-/// Called from Lua as: `ffi.server_start()`
-///
-/// Returns:
-/// ```lua
-/// {
-///   success = true,
-///   port = 12345,
-///   token = "abc123...",
-///   lockfile = "/path/to/lockfile.json"
-/// }
-/// ```
-/// Or on error:
-/// ```lua
-/// {
-///   error = true,
-///   message = "Error description",
-///   category = "error_type"
-/// }
-/// ```
-pub fn server_start() -> nvim_oxi::Result<Object> {
-    match server::start() {
-        Ok((port, token, lockfile_path)) => {
-            let result = Dictionary::from_iter([
-                ("success", Object::from(true)),
-                ("port", Object::from(port as i32)),
-                ("token", Object::from(token)),
-                (
-                    "lockfile",
-                    Object::from(lockfile_path.to_string_lossy().to_string()),
-                ),
-            ]);
-            Ok(Object::from(result))
-        },
-        Err(err) => Ok(create_error_object(&err)),
-    }
-}
-
-/// Stop the WebSocket server
-///
-/// Called from Lua as: `ffi.server_stop()`
-///
-/// Returns:
-/// ```lua
-/// { success = true }
-/// ```
-pub fn server_stop() -> nvim_oxi::Result<Object> {
-    server::stop();
-
-    let result = Dictionary::from_iter([("success", Object::from(true))]);
-    Ok(Object::from(result))
-}
-
-/// Check if WebSocket server is running
-///
-/// Called from Lua as: `ffi.server_is_running()`
-///
-/// Returns:
-/// ```lua
-/// { running = true }
-/// ```
-pub fn server_is_running() -> nvim_oxi::Result<Object> {
-    let result = Dictionary::from_iter([("running", Object::from(server::is_running()))]);
-    Ok(Object::from(result))
-}
-
-/// Setup notification autocommands
-///
-/// Called from Lua as: `ffi.setup_notifications()`
-///
-/// Sets up autocommands that trigger WebSocket notifications:
-/// - CursorMoved/CursorMovedI → selectionDidChange
-/// - BufEnter/WinEnter → visibleFilesDidChange
-///
-/// Returns:
-/// ```lua
-/// { success = true }
-/// ```
-/// Or on error:
-/// ```lua
-/// {
-///   error = true,
-///   message = "Error description",
-///   category = "error_type"
-/// }
-/// ```
-pub fn setup_notifications() -> nvim_oxi::Result<Object> {
-    // Get the Hub from the server (if running)
-    match server::get_hub() {
-        Some(hub) => match crate::autocmds::setup_notifications(hub) {
-            Ok(()) => {
-                let result = Dictionary::from_iter([("success", Object::from(true))]);
-                Ok(Object::from(result))
-            },
-            Err(err) => Ok(create_error_object(&err)),
-        },
-        None => {
-            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
-            Ok(create_error_object(&err))
-        },
-    }
-}
-
-/// Send selectionDidChange notification manually
-///
-/// Called from Lua as: `ffi.send_selection_changed(uri, start_line, start_char,
-/// end_line, end_char, content)`
-///
-/// Returns:
-/// ```lua
-/// { success = true }
-/// ```
-/// Or on error:
-/// ```lua
-/// {
-///   error = true,
-///   message = "Error description"
-/// }
-/// ```
-pub fn send_selection_changed(
-    uri: String,
-    start_line: i64,
-    start_char: i64,
-    end_line: i64,
-    end_char: i64,
-    content: String,
-) -> nvim_oxi::Result<Object> {
-    match server::get_hub() {
-        Some(hub) => {
-            match crate::notifications::send_selection_changed(
-                &hub,
-                &uri,
-                start_line as usize,
-                start_char as usize,
-                end_line as usize,
-                end_char as usize,
-                &content,
-            ) {
-                Ok(()) => {
-                    let result = Dictionary::from_iter([("success", Object::from(true))]);
-                    Ok(Object::from(result))
-                },
-                Err(err) => Ok(create_error_object(&err)),
-            }
-        },
-        None => {
-            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
-            Ok(create_error_object(&err))
-        },
-    }
-}
-
-/// Send visibleFilesDidChange notification manually
-///
-/// Called from Lua as: `ffi.send_visible_files_changed(uris)`
-///
-/// Returns:
-/// ```lua
-/// { success = true }
-/// ```
-/// Or on error:
-/// ```lua
-/// {
-///   error = true,
-///   message = "Error description"
-/// }
-/// ```
-pub fn send_visible_files_changed(uris: Vec<String>) -> nvim_oxi::Result<Object> {
-    match server::get_hub() {
-        Some(hub) => match crate::notifications::send_visible_files_changed(&hub, uris) {
-            Ok(()) => {
-                let result = Dictionary::from_iter([("success", Object::from(true))]);
-                Ok(Object::from(result))
-            },
-            Err(err) => Ok(create_error_object(&err)),
-        },
-        None => {
-            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
-            Ok(create_error_object(&err))
-        },
-    }
-}
-
-/// Send userSentMessage notification
-///
-/// Called from Lua as: `ffi.send_user_message(message)`
-///
-/// Sends user-typed message directly to the agent.
-/// This immediately submits the message to Amp CLI.
-///
-/// Returns:
-/// ```lua
-/// { success = true }
-/// ```
-/// Or on error:
-/// ```lua
-/// {
-///   error = true,
-///   message = "Error description"
-/// }
-/// ```
-pub fn send_user_message(message: String) -> nvim_oxi::Result<Object> {
-    match server::get_hub() {
-        Some(hub) => match crate::notifications::send_user_sent_message(&hub, &message) {
-            Ok(()) => {
-                let result = Dictionary::from_iter([("success", Object::from(true))]);
-                Ok(Object::from(result))
-            },
-            Err(err) => Ok(create_error_object(&err)),
-        },
-        None => {
-            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
-            Ok(create_error_object(&err))
-        },
-    }
-}
-
-/// Send appendToPrompt notification
-///
-/// Called from Lua as: `ffi.send_to_prompt(message)`
-///
-/// Appends text to the IDE prompt field without sending.
-/// Allows user to edit before submitting.
-///
-/// Returns:
-/// ```lua
-/// { success = true }
-/// ```
-/// Or on error:
-/// ```lua
-/// {
-///   error = true,
-///   message = "Error description"
-/// }
-/// ```
-pub fn send_to_prompt(message: String) -> nvim_oxi::Result<Object> {
-    match server::get_hub() {
-        Some(hub) => match crate::notifications::send_append_to_prompt(&hub, &message) {
-            Ok(()) => {
-                let result = Dictionary::from_iter([("success", Object::from(true))]);
-                Ok(Object::from(result))
-            },
-            Err(err) => Ok(create_error_object(&err)),
-        },
-        None => {
-            let err = crate::errors::AmpError::Other("WebSocket server not running".into());
-            Ok(create_error_object(&err))
-        },
-    }
 }
 
 // ============================================================================

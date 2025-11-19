@@ -9,7 +9,6 @@ use tokio::runtime::Runtime;
 /// Global shared Tokio runtime
 ///
 /// This runtime is initialized lazily on first use. It is used for:
-/// - WebSocket server (long-running)
 /// - Async commands (short-lived CLI processes)
 /// - Background tasks
 pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {

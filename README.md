@@ -84,18 +84,6 @@ amp-extras-rs/
 └── docs/              # Documentation
 ```
 
-## Documentation
-
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Complete architecture overview
-- [ASYNC_ARCHITECTURE.md](./ASYNC_ARCHITECTURE.md) - Threading strategy
-- [CONFIGURATION.md](./CONFIGURATION.md) - Configuration layers
-- [ROADMAP.md](./ROADMAP.md) - Development roadmap
-- [DECISIONS.md](./DECISIONS.md) - Key architectural decisions
-
 ## License
 
 MIT
-
-## Credits
-
-Rewrite of [amp-extras.nvim](https://github.com/wrath-codes/amp-extras.nvim) by wrath-codes

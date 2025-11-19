@@ -21,13 +21,14 @@ use serde_json::Value;
 
 use crate::errors::{AmpError, Result};
 
-mod account_update;
-mod send_buffer;
-mod send_file_ref;
-mod send_line_ref;
-mod send_selection;
-mod send_selection_ref;
-mod server_status;
+// Removed command modules:
+// - account_update
+// - send_buffer
+// - send_file_ref
+// - send_line_ref
+// - send_selection
+// - send_selection_ref
+// - server_status
 
 /// Type alias for command handler functions
 ///
@@ -47,43 +48,14 @@ static REGISTRY: Lazy<HashMap<&'static str, CommandHandler>> = Lazy::new(|| {
     // Test command
     map.insert("ping", ping as CommandHandler);
 
-    // Amp interaction commands
-    map.insert(
-        "send_selection",
-        send_selection::send_selection as CommandHandler,
-    );
-    map.insert(
-        "send_selection_ref",
-        send_selection_ref::send_selection_ref as CommandHandler,
-    );
-    map.insert("send_buffer", send_buffer::send_buffer as CommandHandler);
-    map.insert(
-        "send_file_ref",
-        send_file_ref::send_file_ref as CommandHandler,
-    );
-    map.insert(
-        "send_line_ref",
-        send_line_ref::send_line_ref as CommandHandler,
-    );
-
-    // Server management commands
-    map.insert(
-        "server.status",
-        server_status::server_status as CommandHandler,
-    );
-
     map
 });
 
 /// Static async command registry
 static ASYNC_REGISTRY: Lazy<HashMap<&'static str, AsyncCommandHandler>> = Lazy::new(|| {
-    let mut map = HashMap::new();
+    let map = HashMap::new();
 
-    map.insert(
-        "account.update",
-        account_update::account_update as AsyncCommandHandler,
-    );
-
+    // No async commands currently
     map
 });
 
@@ -111,13 +83,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value> {
         // Spawn async task on global runtime
         crate::runtime::spawn(async move {
             if let Err(e) = future.await {
-                // Report error via event bridge
-                 let _ = crate::server::event_bridge::send_event(
-                    crate::server::event_bridge::ServerEvent::LogMessage(
-                        format!("Async command failed: {}", e),
-                        crate::server::event_bridge::LogLevel::Error
-                    )
-                );
+                // Log error to stderr since server bridge is gone
+                eprintln!("Async command failed: {}", e);
             }
         });
 

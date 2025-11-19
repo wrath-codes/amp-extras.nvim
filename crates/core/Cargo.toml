@@ -45,13 +45,6 @@ walkdir.workspace = true
 # Async runtime
 tokio.workspace = true
 
-# WebSocket server
-tokio-tungstenite.workspace = true
-futures-util.workspace = true
-url.workspace = true
-rand.workspace = true
-subtle.workspace = true
-http.workspace = true
 
 [dev-dependencies]
 criterion = "0.7"
