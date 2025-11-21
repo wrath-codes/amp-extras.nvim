@@ -14,6 +14,7 @@ local _state = {
   search_query = "",
   nodes = {},
   selected_index = 1,
+  selected_ids = {},
 }
 
 function M.show(opts)
@@ -26,11 +27,14 @@ function M.show(opts)
     _state.search_query = ""
     _state.nodes = {}
     _state.selected_index = 1
+    _state.selected_ids = {}
   end
 
   -- Close existing renderer if any (e.g. during resize)
   if current_renderer then
-    pcall(function() current_renderer:close() end)
+    pcall(function()
+      current_renderer:close()
+    end)
     current_renderer = nil
   end
 
@@ -38,19 +42,25 @@ function M.show(opts)
   local function setup_highlights()
     -- Ensure the focus highlight group links to a standard selection group
     vim.api.nvim_set_hl(0, "NuiComponentsSelectNodeFocused", { link = "PmenuSel", default = true })
-    
+
     local function get_color(group_name, attr)
-        local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = group_name, link = false })
-        if not ok then return nil end
-        return hl and hl[attr] or nil
+      local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = group_name, link = false })
+      if not ok then
+        return nil
+      end
+      return hl and hl[attr] or nil
     end
 
     -- Create a specific icon highlight that combines the Selection BG with DiagnosticWarn FG
     -- This prevents the selection foreground (usually white) from overriding the warning color
     local bg = get_color("PmenuSel", "bg") or get_color("Visual", "bg") or "#2c323c"
     local warn_fg = get_color("DiagnosticWarn", "fg") or get_color("WarningMsg", "fg") or "#e5c07b" -- Orange/Yellow
-    
+
     vim.api.nvim_set_hl(0, "DashXSelectIcon", { fg = warn_fg, bg = bg, force = true })
+
+    -- Keymap Highlights
+    vim.api.nvim_set_hl(0, "DashXKey", { link = "Special", default = true })
+    vim.api.nvim_set_hl(0, "DashXDesc", { link = "Comment", default = true })
   end
 
   setup_highlights()
@@ -58,10 +68,10 @@ function M.show(opts)
   -- Calculate dimensions based on current screen size
   local total_width = vim.o.columns
   local total_height = vim.o.lines
-  
+
   local width = math.min(120, math.floor(total_width * 0.9))
   local height = math.min(40, math.floor(total_height * 0.8))
-  
+
   -- Determine layout mode
   local is_compact = width < 100
 
@@ -121,7 +131,9 @@ function M.show(opts)
     -- Manual force update
     vim.schedule(function()
       -- Ensure this renderer is still active
-      if renderer ~= current_renderer then return end
+      if renderer ~= current_renderer then
+        return
+      end
 
       local list = renderer:get_component_by_id("prompt_list")
       if list then
@@ -130,15 +142,15 @@ function M.show(opts)
         if tree then
           tree:set_nodes(nodes)
           tree:render()
-          
+
           -- Reset visual cursor to top
           if list.winid and vim.api.nvim_win_is_valid(list.winid) then
-             pcall(vim.api.nvim_win_set_cursor, list.winid, { 1, 0 })
+            pcall(vim.api.nvim_win_set_cursor, list.winid, { 1, 0 })
           end
-          
+
           -- Update preview for the new first item
           if nodes[1] then
-             update_preview(nodes[1])
+            update_preview(nodes[1])
           end
         end
       end
@@ -149,7 +161,7 @@ function M.show(opts)
   local function fetch_data()
     local ok, result = pcall(api.list_prompts)
     if ok then
-      _state.all_prompts = result
+      _state.all_prompts = result or {}
       -- Normalize tags
       for _, p in ipairs(_state.all_prompts) do
         if p.tags and type(p.tags) == "string" and p.tags ~= "" then
@@ -208,7 +220,9 @@ function M.show(opts)
     if prompt then
       vim.schedule(function()
         -- Ensure buffer is still valid
-        if not vim.api.nvim_buf_is_valid(preview_buf) then return end
+        if not vim.api.nvim_buf_is_valid(preview_buf) then
+          return
+        end
 
         -- Enable Markdown highlighting
         vim.bo[preview_buf].buftype = "nofile"
@@ -242,6 +256,12 @@ function M.show(opts)
 
         -- Title
         table.insert(lines, "# " .. prompt.title)
+
+        if prompt.description and prompt.description ~= "" and prompt.description ~= vim.NIL then
+          table.insert(lines, "")
+          table.insert(lines, "**Description:** " .. prompt.description)
+        end
+
         table.insert(lines, "")
 
         -- Metadata Table
@@ -261,16 +281,26 @@ function M.show(opts)
           table.insert(lines, string.format("| **Updated** | %s |", updated))
         end
 
-        -- Tags
-        if prompt.tags and #prompt.tags > 0 then
-          local tag_str = table.concat(prompt.tags, ", ")
-          table.insert(lines, string.format("| **Tags** | %s |", tag_str))
-        else
-          table.insert(lines, "| **Tags** | None |")
-        end
-
         table.insert(lines, "")
+
+        -- Tags (Separate Section)
+        if prompt.tags and #prompt.tags > 0 then
+          table.insert(lines, "## Tags")
+          table.insert(lines, "")
+
+          local tag_items = {}
+          for _, t in ipairs(prompt.tags) do
+            -- Sanitize tags to ensure no newlines
+            local safe_tag = string.gsub(t, "[\r\n]", " ")
+            table.insert(tag_items, "`" .. safe_tag .. "`")
+          end
+          -- Join with spaces for a "chip" list look
+          table.insert(lines, table.concat(tag_items, " "))
+          table.insert(lines, "")
+        end
         table.insert(lines, "---")
+        table.insert(lines, "")
+        table.insert(lines, "## Content")
         table.insert(lines, "")
 
         -- Content
@@ -299,8 +329,10 @@ function M.show(opts)
 
   -- Shared logic to submit a prompt
   local function submit_prompt(prompt)
-    if not prompt then return end
-    
+    if not prompt then
+      return
+    end
+
     -- Usage tracking
     pcall(api.use_prompt, prompt.id)
 
@@ -313,28 +345,213 @@ function M.show(opts)
     end
 
     if current_renderer then
-      pcall(function() current_renderer:close() end)
+      pcall(function()
+        current_renderer:close()
+      end)
       current_renderer = nil
     end
   end
 
+  local function update_keymaps()
+    local selected_count = 0
+    for _ in pairs(_state.selected_ids) do
+      selected_count = selected_count + 1
+    end
+
+    local actions = {}
+    if selected_count == 0 then
+      table.insert(actions, { key = "<Enter>", desc = "Send" })
+    end
+    table.insert(actions, { key = "<Tab>", desc = "Select" })
+    table.insert(actions, { key = "<S-Tab>", desc = "Deselect" })
+    table.insert(actions, { key = "<C-n>", desc = "New" })
+
+    if selected_count > 0 then
+      table.insert(actions, { key = "<C-t>", desc = "Edit Tags" })
+      table.insert(actions, { key = "<C-d>", desc = "Delete (" .. selected_count .. ")" })
+    else
+      table.insert(actions, { key = "<C-e>", desc = "Edit" })
+      table.insert(actions, { key = "<C-d>", desc = "Delete" })
+    end
+
+    table.insert(actions, { key = "q/<CR>", desc = "Close" })
+
+    local comp = renderer:get_component_by_id("keymaps_display")
+    if comp and comp.bufnr and vim.api.nvim_buf_is_valid(comp.bufnr) then
+      -- Manual Centering & Multiline Logic
+      local win_width = 0
+      if comp.winid and vim.api.nvim_win_is_valid(comp.winid) then
+        win_width = vim.api.nvim_win_get_width(comp.winid)
+      else
+        win_width = renderer._layout_options and renderer._layout_options.width or 80
+      end
+
+      local final_lines = {}
+      local all_highlights = {} -- Flat list of {line_idx, group, start_col, end_col}
+
+      -- Helper to process a chunk of actions
+      local function process_chunk(chunk, line_idx)
+        local line_text = ""
+        local chunk_highlights = {}
+
+        for i, action in ipairs(chunk) do
+          if i > 1 then
+            line_text = line_text .. "   " -- 3 spaces separator
+          end
+
+          -- Key
+          local key_start = #line_text
+          line_text = line_text .. action.key
+          table.insert(chunk_highlights, { "DashXKey", key_start, #line_text })
+
+          -- Space
+          line_text = line_text .. " "
+
+          -- Desc
+          local desc_start = #line_text
+          line_text = line_text .. action.desc
+          table.insert(chunk_highlights, { "DashXDesc", desc_start, #line_text })
+        end
+
+        local text_width = vim.fn.strdisplaywidth(line_text)
+        local padding = math.max(0, math.floor((win_width - text_width) / 2))
+        local centered_text = string.rep(" ", padding) .. line_text
+
+        table.insert(final_lines, centered_text)
+
+        -- Adjust highlights for padding and add to main list
+        for _, hl in ipairs(chunk_highlights) do
+          table.insert(all_highlights, { line_idx, hl[1], padding + hl[2], padding + hl[3] })
+        end
+      end
+
+      -- Split actions into chunks of 4
+      local current_chunk = {}
+      local current_line_idx = 0
+
+      for i, action in ipairs(actions) do
+        table.insert(current_chunk, action)
+        if #current_chunk == 4 then
+          process_chunk(current_chunk, current_line_idx)
+          current_chunk = {}
+          current_line_idx = current_line_idx + 1
+        end
+      end
+
+      -- Process remaining items
+      if #current_chunk > 0 then
+        process_chunk(current_chunk, current_line_idx)
+      end
+
+      vim.bo[comp.bufnr].modifiable = true
+      -- Force enough lines in the buffer to avoid "Index out of bounds" or weird scrolling if component height is fixed
+      vim.api.nvim_buf_set_lines(comp.bufnr, 0, -1, false, final_lines)
+      vim.bo[comp.bufnr].modifiable = false
+
+      -- Force refresh window view to ensure lines are visible
+      if comp.winid and vim.api.nvim_win_is_valid(comp.winid) then
+        -- Reset view to top
+        vim.api.nvim_win_set_cursor(comp.winid, { 1, 0 })
+      end
+
+      -- Apply highlights
+      local ns_id = vim.api.nvim_create_namespace("dashx_keymaps")
+      vim.api.nvim_buf_clear_namespace(comp.bufnr, ns_id, 0, -1)
+
+      for _, hl in ipairs(all_highlights) do
+        -- hl = {line_idx, group, start, end}
+        vim.api.nvim_buf_add_highlight(comp.bufnr, ns_id, hl[2], hl[1], hl[3], hl[4])
+      end
+    end
+  end
+
+  -- Forward declaration for helper
+  local move_selection_helper
+
+  local function toggle_selection()
+    local node = _state.nodes[_state.selected_index]
+    if not node or not node._prompt then
+      return
+    end
+
+    local id = node._prompt.id
+    if _state.selected_ids[id] then
+      _state.selected_ids[id] = nil
+    else
+      _state.selected_ids[id] = true
+      -- Move to next item only on select
+      move_selection_helper(1)
+    end
+
+    update_keymaps()
+
+    local list = renderer:get_component_by_id("prompt_list")
+    if list then
+      local tree = list.tree or (list.get_tree and list:get_tree())
+      if tree then
+        tree:render()
+      end
+    end
+  end
+
+  local function toggle_selection_back()
+    local node = _state.nodes[_state.selected_index]
+    if not node or not node._prompt then
+      return
+    end
+
+    local id = node._prompt.id
+    if _state.selected_ids[id] then
+      _state.selected_ids[id] = nil
+    end
+
+    -- Move back after unselecting (optional, but usually intuitive for "Shift-Tab")
+    move_selection_helper(-1)
+
+    update_keymaps()
+
+    local list = renderer:get_component_by_id("prompt_list")
+    if list then
+      local tree = list.tree or (list.get_tree and list:get_tree())
+      if tree then
+        tree:render()
+      end
+    end
+  end
+
   local function submit_selection()
-     local node = _state.nodes[_state.selected_index]
-     if node and node._prompt then
-       submit_prompt(node._prompt)
-     end
+    -- If multiple selection is active, disable send
+    local selected_count = 0
+    for _ in pairs(_state.selected_ids) do
+      selected_count = selected_count + 1
+    end
+
+    if selected_count > 0 then
+      return
+    end
+
+    local node = _state.nodes[_state.selected_index]
+    if node and node._prompt then
+      submit_prompt(node._prompt)
+    end
   end
 
   -- Shared mappings for CRUD operations
   local function get_crud_mappings(component_id)
     local function move_selection(direction)
       local count = #_state.nodes
-      if count == 0 then return end
+      if count == 0 then
+        return
+      end
 
       local new_index = _state.selected_index + direction
-      if new_index < 1 then new_index = 1 end
-      if new_index > count then new_index = count end
-      
+      if new_index < 1 then
+        new_index = 1
+      end
+      if new_index > count then
+        new_index = count
+      end
+
       _state.selected_index = new_index
 
       -- Update visual selection
@@ -343,26 +560,39 @@ function M.show(opts)
         local winid = list.winid
         if winid and vim.api.nvim_win_is_valid(winid) then
           pcall(vim.api.nvim_win_set_cursor, winid, { new_index, 0 })
-          
+
           -- Force re-render for highlight update (optional if nui handles it, but safer)
           local tree = list.tree or (list.get_tree and list:get_tree())
           if tree then
-             tree:render()
+            tree:render()
           end
         end
       end
-      
+
       -- Update preview
       if _state.nodes[new_index] then
         update_preview(_state.nodes[new_index])
       end
     end
 
+    -- Assign to the outer variable so it's accessible by toggle_selection
+    move_selection_helper = move_selection
+
     return {
       {
         mode = { "n", "i" },
         key = "<CR>",
         handler = submit_selection,
+      },
+      {
+        mode = { "n", "i" },
+        key = "<Tab>",
+        handler = toggle_selection,
+      },
+      {
+        mode = { "n", "i" },
+        key = "<S-Tab>",
+        handler = toggle_selection_back,
       },
       {
         mode = { "n" },
@@ -409,6 +639,15 @@ function M.show(opts)
         mode = { "n", "i" },
         key = "<C-e>",
         handler = function()
+          -- If in bulk mode, C-e is disabled
+          local selected_count = 0
+          for _ in pairs(_state.selected_ids) do
+            selected_count = selected_count + 1
+          end
+          if selected_count > 0 then
+            return
+          end
+
           -- Always try to get the selected node from the list component
           local list = renderer:get_component_by_id("prompt_list")
           if list then
@@ -431,8 +670,67 @@ function M.show(opts)
       },
       {
         mode = { "n", "i" },
+        key = "<C-t>",
+        handler = function()
+          local targets = {}
+          local selected_count = 0
+          for _ in pairs(_state.selected_ids) do
+            selected_count = selected_count + 1
+          end
+
+          if selected_count > 0 then
+            for _, p in ipairs(_state.all_prompts) do
+              if _state.selected_ids[p.id] then
+                table.insert(targets, p)
+              end
+            end
+          else
+            local node = _state.nodes[_state.selected_index]
+            if node and node._prompt then
+              table.insert(targets, node._prompt)
+            end
+          end
+
+          if #targets == 0 then
+            return
+          end
+
+          renderer:close()
+          form.show({
+            mode = "bulk_tags",
+            prompt = (#targets == 1) and targets[1] or nil,
+            on_success = function(new_tags)
+              for _, p in ipairs(targets) do
+                pcall(api.update_prompt, p.id, p.title, p.content, new_tags)
+              end
+              M.show()
+            end,
+          })
+        end,
+      },
+      {
+        mode = { "n", "i" },
         key = "<C-d>",
         handler = function()
+          local selected_count = 0
+          for _ in pairs(_state.selected_ids) do
+            selected_count = selected_count + 1
+          end
+
+          if selected_count > 0 then
+            local choice =
+              vim.fn.confirm("Delete " .. selected_count .. " prompts?", "&Yes\n&No", 2)
+            if choice == 1 then
+              for id, _ in pairs(_state.selected_ids) do
+                pcall(api.delete_prompt, id)
+              end
+              _state.selected_ids = {}
+              update_keymaps()
+              fetch_data()
+            end
+            return
+          end
+
           local list = renderer:get_component_by_id("prompt_list")
           if list then
             local tree = list.tree or (list.get_tree and list:get_tree())
@@ -447,6 +745,15 @@ function M.show(opts)
                 end
               end
             end
+          end
+        end,
+      },
+      {
+        mode = { "n" },
+        key = "q",
+        handler = function()
+          if renderer then
+            renderer:close()
           end
         end,
       },
@@ -522,20 +829,24 @@ function M.show(opts)
           return line
         end
 
-        if focused then
-            -- Focused line: drive everything through focused_hl for consistency
-            -- This ensures the entire line (text + background) looks unified and selected
-            -- We use DashXSelectIcon for the icon to ensure it is yellow/orange but keeps the selection BG
-            line:append(n.text("> ", "DashXSelectIcon"))
-            line:append(n.text(prompt.title, focused_hl))
+        local is_checked = _state.selected_ids[prompt.id]
+        local check_text = is_checked and " " or " "
+        local check_hl = is_checked and "String" or "Comment"
 
-            if prompt.usage_count > 0 then
-                line:append(n.text(" ", focused_hl))
-                line:append(n.text(string.format("(Used: %d)", prompt.usage_count), focused_hl))
-            end
+        if focused then
+          -- Focused line
+          line:append(n.text("> ", "DashXSelectIcon"))
+          line:append(n.text(check_text, check_hl))
+          line:append(n.text(prompt.title, focused_hl))
+
+          if prompt.usage_count > 0 then
+            line:append(n.text(" ", focused_hl))
+            line:append(n.text(string.format("(Used: %d)", prompt.usage_count), focused_hl))
+          end
         else
-          -- Unfocused line: use distinct styling
+          -- Unfocused line
           line:append(n.text("  ", base_hl))
+          line:append(n.text(check_text, check_hl))
           line:append(n.text(prompt.title, "Function"))
 
           if prompt.usage_count > 0 then
@@ -563,15 +874,19 @@ function M.show(opts)
     local preview_component = PreviewComponent(preview_props)
 
     local keymaps_component = n.paragraph({
-      lines = "<Enter> Send | <C-n> New | <C-e> Edit | <C-d> Delete",
+      id = "keymaps_display",
+      lines = " \n ", -- Initialize with 2 lines to ensure height
       align = "center",
       is_focusable = false,
-      size = 3,
+      size = 5,
       border_label = {
         text = "Keymaps",
         icon = "",
       },
       window = window_style,
+      on_mount = function()
+        vim.schedule(update_keymaps)
+      end,
     })
 
     if is_compact then
@@ -592,11 +907,7 @@ function M.show(opts)
         n.columns(
           { flex = 1 },
           -- Left Pane: Search & List (30%)
-          n.rows(
-            { flex = 1 },
-            search_component,
-            list_component
-          ),
+          n.rows({ flex = 1 }, search_component, list_component),
           -- Right Pane: Preview (70%)
           preview_component
         ),
@@ -631,7 +942,9 @@ function M.show(opts)
     if vim.api.nvim_buf_is_valid(preview_buf) then
       vim.api.nvim_buf_delete(preview_buf, { force = true })
     end
-    if original_close then original_close(self) end
+    if original_close then
+      original_close(self)
+    end
   end
 end
 

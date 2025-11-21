@@ -4,15 +4,16 @@ local api = require("amp_extras.commands.dashx.api")
 local M = {}
 
 ---@class DashXFormProps
----@field mode "create"|"edit"
+---@field mode "create"|"edit"|"bulk_tags"
 ---@field prompt Prompt?
----@field on_success fun(prompt: Prompt)
+---@field on_success fun(prompt: Prompt|boolean|string[]|nil)
 
 ---Show the Create/Edit Prompt Form
 ---@param props DashXFormProps
 function M.show(props)
   local is_edit = props.mode == "edit"
-  local prompt = props.prompt or { title = "", content = "", tags = nil }
+  local is_bulk_tags = props.mode == "bulk_tags"
+  local prompt = props.prompt or { title = "", content = "", tags = nil, description = "" }
 
   -- Convert tags array to comma-separated string
   local tags_str = ""
@@ -22,7 +23,7 @@ function M.show(props)
 
   local renderer = n.create_renderer({
     width = 80,
-    height = 30,
+    height = is_bulk_tags and 10 or 30,
   })
 
   local window_style = {
@@ -44,34 +45,47 @@ function M.show(props)
       local component = renderer:get_component_by_id("prompt_form")
       if not component then return end
       
-      -- Get values via IDs - workaround for component access
-      -- n.form doesn't pass values directly in on_submit yet in all versions, 
-      -- so we might need to grab them from the inputs if available, 
-      -- or rely on component state if n.form supports it.
-      -- Assuming newer nui-components where we can access children or state.
-      
-      -- Actually, best way in nui-components is often binding signals or accessing by ID
-      local title_comp = renderer:get_component_by_id("title_input")
       local tags_comp = renderer:get_component_by_id("tags_input")
-      local content_comp = renderer:get_component_by_id("content_input")
-
-      local title = title_comp:get_current_value()
+      if not tags_comp then return end
       local tags_val = tags_comp:get_current_value()
-      local content = content_comp:get_current_value()
-
+      
       -- Process tags
       local tags = {}
       for tag in string.gmatch(tags_val, "([^,]+)") do
-        table.insert(tags, vim.trim(tag))
+        local clean_tag = vim.trim(tag)
+        clean_tag = string.gsub(clean_tag, "[\r\n]", " ")
+        if clean_tag ~= "" then
+          table.insert(tags, clean_tag)
+        end
       end
       if #tags == 0 then tags = nil end
+
+      if is_bulk_tags then
+        renderer:close()
+        if props.on_success then
+          props.on_success(tags)
+        end
+        return
+      end
+
+      local title_comp = renderer:get_component_by_id("title_input")
+      local description_comp = renderer:get_component_by_id("description_input")
+      local content_comp = renderer:get_component_by_id("content_input")
+
+      local title = title_comp:get_current_value()
+      local description = description_comp and description_comp:get_current_value()
+      local content = content_comp:get_current_value()
+
+      if description and vim.trim(description) == "" then
+        description = nil
+      end
 
       -- Call API
       local success, result
       if is_edit then
-        success, result = pcall(api.update_prompt, prompt.id, title, content, tags)
+        success, result = pcall(api.update_prompt, prompt.id, title, description, content, tags)
       else
-        success, result = pcall(api.create_prompt, title, content, tags)
+        success, result = pcall(api.create_prompt, title, description, content, tags)
       end
 
       if success then
@@ -84,7 +98,33 @@ function M.show(props)
         vim.notify("Error: " .. tostring(result), vim.log.levels.ERROR)
       end
     end
-  }, n.rows(
+  }, is_bulk_tags and n.rows(
+    n.text_input({
+      id = "tags_input",
+      border_label = "Tags (comma separated)",
+      placeholder = "rust, logic, testing",
+      value = tags_str,
+      window = window_style,
+      autofocus = true, -- Autofocus tags in bulk mode
+      on_mount = function(component)
+        -- Map <CR> to submit in normal/insert mode to prevent newlines and auto-save
+        if component.bufnr then
+          vim.keymap.set({"n", "i"}, "<CR>", function()
+            local form = renderer:get_component_by_id("prompt_form")
+            if form then form:submit() end
+          end, { buffer = component.bufnr, nowait = true })
+        end
+      end,
+    }),
+    n.gap(1),
+    n.paragraph({
+      lines = "Press <Enter> or <C-s> to save tags for all selected items, <Esc> to cancel",
+      align = "center",
+      is_focusable = false,
+      border_label = "Actions",
+      window = window_style,
+    })
+  ) or n.rows(
     n.text_input({
       id = "title_input",
       border_label = "Title",
@@ -92,6 +132,15 @@ function M.show(props)
       value = prompt.title,
       validate = n.validator.min_length(3),
       autofocus = true,
+      window = window_style,
+    }),
+    n.gap(1),
+    n.text_input({
+      id = "description_input",
+      border_label = "Description",
+      placeholder = "Brief description (optional)",
+      value = prompt.description,
+      max_lines = 1,
       window = window_style,
     }),
     n.gap(1),

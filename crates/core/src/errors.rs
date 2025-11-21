@@ -25,7 +25,7 @@ pub enum AmpError {
 
     /// Database error
     #[error("Database error: {0}")]
-    DatabaseError(#[from] rusqlite::Error),
+    DatabaseError(#[from] sqlx::Error),
 
     /// I/O error
     #[error("I/O error: {0}")]

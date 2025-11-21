@@ -5,6 +5,7 @@ local M = {}
 ---@class Prompt
 ---@field id string
 ---@field title string
+---@field description string?
 ---@field content string
 ---@field tags string[]?
 ---@field usage_count number
@@ -24,12 +25,14 @@ end
 
 ---Create a new prompt
 ---@param title string
+---@param description string?
 ---@param content string
 ---@param tags string[]?
 ---@return Prompt
-function M.create_prompt(title, content, tags)
+function M.create_prompt(title, description, content, tags)
     local result = ffi.call("prompts.create", {
         title = title,
+        description = description,
         content = content,
         tags = tags
     })
@@ -42,12 +45,14 @@ end
 ---Update an existing prompt
 ---@param id string
 ---@param title string
+---@param description string?
 ---@param content string
 ---@param tags string[]?
-function M.update_prompt(id, title, content, tags)
+function M.update_prompt(id, title, description, content, tags)
     local result = ffi.call("prompts.update", {
         id = id,
         title = title,
+        description = description,
         content = content,
         tags = tags
     })

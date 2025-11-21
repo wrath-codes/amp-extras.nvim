@@ -21,6 +21,8 @@ use serde_json::Value;
 
 use crate::errors::{AmpError, Result};
 
+mod prompts;
+
 // Removed command modules:
 // - account_update
 // - send_buffer
@@ -48,8 +50,15 @@ static REGISTRY: Lazy<HashMap<&'static str, CommandHandler>> = Lazy::new(|| {
     // Test command
     map.insert("ping", ping as CommandHandler);
 
+    // DashX Prompts
+    map.insert("prompts.list", prompts::list as CommandHandler);
+    map.insert("prompts.create", prompts::create as CommandHandler);
+    map.insert("prompts.update", prompts::update as CommandHandler);
+    map.insert("prompts.delete", prompts::delete as CommandHandler);
+    map.insert("prompts.use", prompts::use_prompt as CommandHandler);
+    
     map
-});
+    });
 
 /// Static async command registry
 static ASYNC_REGISTRY: Lazy<HashMap<&'static str, AsyncCommandHandler>> = Lazy::new(|| {

@@ -71,6 +71,8 @@ function M.register_commands()
     range = true,
     desc = "Amp: Send file reference with selected line range to Amp prompt (@file.rs#L10-L20)",
   })
+
+  require("amp_extras.commands.dashx").setup()
 end
 
 return M

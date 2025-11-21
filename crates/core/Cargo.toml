@@ -15,7 +15,7 @@ nvim-oxi.workspace = true
 
 # Database
 dotenvy.workspace = true
-rusqlite.workspace = true
+sqlx.workspace = true
 
 # Serialization
 serde.workspace = true

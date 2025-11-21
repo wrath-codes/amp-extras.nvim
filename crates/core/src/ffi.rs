@@ -11,7 +11,7 @@ use nvim_oxi::{serde::Deserializer, Dictionary, Object};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{commands, errors::{AmpError, Result}};
+use crate::{commands, errors::{AmpError, Result}, db::Db, runtime};
 
 /// Plugin configuration
 #[derive(Debug, Clone, Deserialize)]
@@ -104,6 +104,23 @@ pub fn setup(config_obj: Object) -> nvim_oxi::Result<Object> {
 
     // Store config (first call wins)
     let _ = CONFIG.set(config);
+
+    // Initialize Database
+    // Use XDG_CONFIG_HOME or ~/.config style path
+    // On macOS, dirs::config_dir defaults to Application Support, but we prefer ~/.config
+    let config_dir = std::env::var("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .ok() // Convert Result to Option
+        .or_else(|| dirs::home_dir().map(|h| h.join(".config")))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let db_path = config_dir.join("amp-extras/prompts.db");
+    
+    let db_path_str = db_path.to_str().unwrap_or("prompts.db");
+
+    if let Err(e) = runtime::block_on(Db::init(db_path_str)) {
+         return Ok(create_error_object(&e));
+    }
 
     let result = Dictionary::from_iter([("success", Object::from(true))]);
     Ok(Object::from(result))
