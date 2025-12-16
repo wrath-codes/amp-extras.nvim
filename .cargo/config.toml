@@ -19,8 +19,12 @@ rustflags = ["-C", "link-arg=-Wl,--allow-shlib-undefined"]
 rustflags = ["-C", "link-arg=-Wl,--allow-shlib-undefined"]
 
 [target.x86_64-unknown-linux-musl]
-# Linux musl linker flags - allow undefined symbols (resolved by Neovim at runtime)
-rustflags = ["-C", "link-arg=-Wl,--allow-shlib-undefined"]
+# Musl: disable static crt, allow undefined symbols
+rustflags = ["-C", "target-feature=-crt-static", "-C", "link-arg=-Wl,--allow-shlib-undefined"]
+
+[target.aarch64-unknown-linux-musl]
+# Musl: disable static crt, allow undefined symbols
+rustflags = ["-C", "target-feature=-crt-static", "-C", "link-arg=-Wl,--allow-shlib-undefined"]
 
 [target.x86_64-pc-windows-msvc]
 # Windows linker flags (if needed in future)

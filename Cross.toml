@@ -1,22 +1,19 @@
 [build.env]
 passthrough = [
     "RUST_BACKTRACE",
+    "LUA_INC",
+    "LUA_LIB", 
+    "LUA_LIB_NAME",
+    "LUAJIT_NO_PKG_CONFIG",
 ]
 
+# Use zig linker for consistent glibc version (supports older distros)
 [target.x86_64-unknown-linux-gnu]
-pre-build = [
-    "apt-get update",
-    "apt-get install -y libsqlite3-dev libluajit-5.1-dev pkg-config"
-]
+zig = "2.17"
 
 [target.aarch64-unknown-linux-gnu]
-pre-build = [
-    "apt-get update",
-    "apt-get install -y libsqlite3-dev libluajit-5.1-dev pkg-config"
-]
+zig = "2.17"
 
 [target.x86_64-unknown-linux-musl]
-pre-build = [
-    "apt-get update",
-    "apt-get install -y libsqlite3-dev libluajit-5.1-dev pkg-config musl-tools"
-]
+
+[target.aarch64-unknown-linux-musl]

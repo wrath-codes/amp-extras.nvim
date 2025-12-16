@@ -31,7 +31,7 @@ jobs:
             artifact_name: libamp_extras_core.so
             asset_name: aarch64-unknown-linux-gnu.so
 
-          # Linux x86_64 (musl - Alpine)
+          # Linux x86_64 (musl - Alpine/WSL)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact_name: libamp_extras_core.so
