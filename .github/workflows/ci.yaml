@@ -59,9 +59,13 @@ jobs:
         run: brew install luajit
       - name: Install LuaJIT (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          choco install luajit -y
-          echo "LUA_LIB=$env:ChocolateyInstall\lib\luajit\tools" >> $env:GITHUB_ENV
+          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+          scoop install luajit
+          $luajitPath = scoop prefix luajit
+          echo "LUA_LIB=$luajitPath" >> $env:GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$luajitPath/lib/pkgconfig" >> $env:GITHUB_ENV
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --package amp_extras_core --lib
 
@@ -82,9 +86,13 @@ jobs:
         run: brew install luajit
       - name: Install LuaJIT (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          choco install luajit -y
-          echo "LUA_LIB=$env:ChocolateyInstall\lib\luajit\tools" >> $env:GITHUB_ENV
+          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+          scoop install luajit
+          $luajitPath = scoop prefix luajit
+          echo "LUA_LIB=$luajitPath" >> $env:GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$luajitPath/lib/pkgconfig" >> $env:GITHUB_ENV
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release --package amp_extras_core
 
