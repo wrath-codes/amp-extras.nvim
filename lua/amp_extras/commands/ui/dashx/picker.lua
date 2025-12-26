@@ -21,12 +21,16 @@ local _state = {
 function M.show(opts)
   opts = opts or {}
   local is_resize = opts.keep_state
-
   -- If opening fresh, reset state
   if not is_resize then
     _state.all_prompts = {}
     _state.search_query = ""
     _state.nodes = {}
+    _state.selected_index = 1
+    _state.selected_ids = {}
+  end
+
+  if is_resize then
     _state.selected_index = 1
     _state.selected_ids = {}
   end
@@ -37,6 +41,17 @@ function M.show(opts)
       current_renderer:close()
     end)
     current_renderer = nil
+  end
+
+  if not is_resize then
+    vim.api.nvim_create_autocmd("BufEnter", {
+      pattern = "*",
+      callback = function()
+        if current_renderer then
+          current_renderer:close()
+        end
+      end,
+    })
   end
 
   -- Helper to ensure we get a valid background color for our selection cursor
@@ -128,6 +143,7 @@ function M.show(opts)
     signal.nodes = nodes
     _state.nodes = nodes
     _state.selected_index = 1
+    _state.selected_ids = {}
 
     -- Manual force update
     vim.schedule(function()

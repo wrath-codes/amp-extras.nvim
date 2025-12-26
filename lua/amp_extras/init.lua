@@ -25,6 +25,7 @@ local defaults = {
     dashx = true, -- DashX prompts
     session = true, -- Session management
     lualine = true, -- Lualine integration
+    amptab = true, -- AmpTab inline completions (blink.cmp source)
   },
 
   -- Keymap overrides
@@ -227,6 +228,11 @@ function M.setup(opts)
   -- Setup Lualine integration if enabled
   if M.config.features.lualine then
     M.lualine.setup()
+  end
+
+  -- Setup AmpTab if enabled
+  if M.config.features.amptab then
+    require("amp_extras.amptab").setup(M.config.amptab or {})
   end
 
   return M.config
