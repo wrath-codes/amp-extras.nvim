@@ -54,7 +54,7 @@ end
 ---@return table[] List of {row, col, severity, message}
 local function get_buffer_diagnostics(bufnr)
   local results = {}
-  
+
   -- Try amp.nvim first
   local amp_diag = get_amp_diagnostics()
   if amp_diag then
@@ -73,7 +73,7 @@ local function get_buffer_diagnostics(bufnr)
       end
     end
   end
-  
+
   -- Fallback to vim.diagnostic if no amp.nvim results
   if #results == 0 then
     local diagnostics = vim.diagnostic.get(bufnr)
@@ -88,7 +88,7 @@ local function get_buffer_diagnostics(bufnr)
       })
     end
   end
-  
+
   -- Sort by severity (errors first) then by line
   table.sort(results, function(a, b)
     local sev_order = { error = 1, warning = 2, info = 3, hint = 4 }
@@ -99,7 +99,7 @@ local function get_buffer_diagnostics(bufnr)
     end
     return a.row < b.row
   end)
-  
+
   return results
 end
 
@@ -110,12 +110,12 @@ end
 ---@param source string
 local function preload_at_position(bufnr, row, col, source)
   local key = string.format("%d:%d:%d", bufnr, row, col)
-  
+
   -- Skip if already in flight
   if M.in_flight[key] then
     return
   end
-  
+
   -- Check if we already have a cached completion near this location
   local existing = cache.get_for_current_buffer()
   for _, item in ipairs(existing) do
@@ -123,28 +123,28 @@ local function preload_at_position(bufnr, row, col, source)
       return -- Already have something nearby
     end
   end
-  
+
   M.in_flight[key] = true
-  
+
   -- Temporarily move cursor to build context (restore after)
   local win = vim.api.nvim_get_current_win()
   local orig_cursor = vim.api.nvim_win_get_cursor(win)
-  
+
   -- Set cursor to diagnostic position
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   local target_row = math.min(row + 1, line_count) -- 1-indexed
   local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
   local target_col = math.min(col, #line)
-  
+
   pcall(vim.api.nvim_win_set_cursor, win, { target_row, target_col })
-  
+
   -- Build context at this position
   local amptab = require("amp_extras.amptab")
   local ctx = context.build(bufnr, amptab.config.token_limits)
-  
+
   -- Restore cursor
   pcall(vim.api.nvim_win_set_cursor, win, orig_cursor)
-  
+
   -- Make the request
   client.complete(
     {
@@ -155,20 +155,20 @@ local function preload_at_position(bufnr, row, col, source)
     function(_) end, -- on_chunk (ignore streaming)
     function(final_text)
       M.in_flight[key] = nil
-      
+
       if not final_text or final_text == "" then
         return
       end
-      
+
       local cleaned = strip_tokens(final_text):gsub("%s+$", ""):gsub("^\n+", "")
       if cleaned == "" then
         return
       end
-      
+
       -- Extract display text
       local prefix = ctx.prefix_in_region or ""
       local suffix = ctx.suffix_in_region or ""
-      
+
       local suffix_match_len = 0
       local min_suffix_len = math.min(#suffix, #cleaned)
       for i = 1, min_suffix_len do
@@ -178,7 +178,7 @@ local function preload_at_position(bufnr, row, col, source)
           break
         end
       end
-      
+
       local prefix_match_len = 0
       local max_prefix_check = #cleaned - suffix_match_len
       local min_prefix_len = math.min(#prefix, max_prefix_check)
@@ -189,13 +189,14 @@ local function preload_at_position(bufnr, row, col, source)
           break
         end
       end
-      
-      local display_text = cleaned:sub(prefix_match_len + 1, #cleaned - suffix_match_len):gsub("%s+$", "")
-      
+
+      local display_text =
+        cleaned:sub(prefix_match_len + 1, #cleaned - suffix_match_len):gsub("%s+$", "")
+
       if display_text == "" then
         return
       end
-      
+
       -- Cache it
       cache.add({
         text = display_text,
@@ -205,10 +206,13 @@ local function preload_at_position(bufnr, row, col, source)
         cursor_row = row,
         cursor_col = col,
       }, source)
-      
+
       if amptab.config.debug then
         vim.schedule(function()
-          vim.notify(string.format("[AmpTab] Preloaded completion at line %d (%s)", row + 1, source), vim.log.levels.DEBUG)
+          vim.notify(
+            string.format("[AmpTab] Preloaded completion at line %d (%s)", row + 1, source),
+            vim.log.levels.DEBUG
+          )
         end)
       end
     end,
@@ -223,17 +227,17 @@ function M.preload_diagnostics()
   if not M.enabled then
     return
   end
-  
+
   local bufnr = vim.api.nvim_get_current_buf()
   local diagnostics = get_buffer_diagnostics(bufnr)
-  
+
   -- Only preload top N diagnostics (prioritizing errors)
   local count = 0
   for _, d in ipairs(diagnostics) do
     if count >= M.max_preloads_per_buffer then
       break
     end
-    
+
     -- Only preload errors and warnings
     if d.severity == "error" or d.severity == "warning" then
       preload_at_position(bufnr, d.row, d.col, "diagnostic")
@@ -247,11 +251,11 @@ function M.schedule_preload()
   if not M.enabled then
     return
   end
-  
+
   if M.timer then
     vim.fn.timer_stop(M.timer)
   end
-  
+
   M.timer = vim.fn.timer_start(M.debounce_ms, function()
     vim.schedule(function()
       M.preload_diagnostics()
@@ -264,13 +268,13 @@ function M.enable()
   if M.enabled then
     return
   end
-  
+
   M.enabled = true
   M.ns = vim.api.nvim_create_namespace("amptab_preloader")
-  
+
   -- Create autocommands
   local group = vim.api.nvim_create_augroup("AmpTabPreloader", { clear = true })
-  
+
   -- Preload on diagnostic changes
   vim.api.nvim_create_autocmd("DiagnosticChanged", {
     group = group,
@@ -278,7 +282,7 @@ function M.enable()
       M.schedule_preload()
     end,
   })
-  
+
   -- Preload when entering a buffer
   vim.api.nvim_create_autocmd("BufEnter", {
     group = group,
@@ -289,7 +293,7 @@ function M.enable()
       end, 500)
     end,
   })
-  
+
   -- Preload after being idle
   vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
     group = group,
@@ -302,12 +306,12 @@ end
 ---Disable the preloader
 function M.disable()
   M.enabled = false
-  
+
   if M.timer then
     vim.fn.timer_stop(M.timer)
     M.timer = nil
   end
-  
+
   vim.api.nvim_clear_autocmds({ group = "AmpTabPreloader" })
 end
 

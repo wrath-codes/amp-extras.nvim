@@ -69,15 +69,15 @@ end
 ---@param bufnr? number Buffer number (default: current)
 function M.show(completion, bufnr)
   M.dismiss()
-  
+
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   local ns = ensure_ns()
-  
+
   -- Validate buffer
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
-  
+
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   local target_row = completion.cursor_row
   if target_row >= line_count then
@@ -86,36 +86,36 @@ function M.show(completion, bufnr)
   if target_row < 0 then
     target_row = 0
   end
-  
+
   -- Get current line content
   local current_line = vim.api.nvim_buf_get_lines(bufnr, target_row, target_row + 1, false)[1] or ""
   local cursor_col = math.min(completion.cursor_col or 0, #current_line)
-  
+
   -- The display_text is the NEW portion to show
   local display_text = completion.text or ""
   if display_text == "" then
     return
   end
-  
+
   -- Split into lines
   local lines = vim.split(display_text, "\n", { plain = true })
   if #lines == 0 then
     return
   end
-  
+
   -- First line: inline virtual text at cursor position
   local first_line = lines[1]
-  
+
   -- Text after cursor on current line (for positioning)
   local text_after_cursor = current_line:sub(cursor_col + 1)
-  
+
   -- Determine virt_text_pos based on whether there's text after cursor
   local virt_text_pos = "inline"
   if #text_after_cursor > 0 then
     -- If there's text after cursor, use overlay or eol
     virt_text_pos = "eol"
   end
-  
+
   local extmark_opts = {
     virt_text = {
       { "⚡ ", M.hl_group_indicator },
@@ -125,7 +125,7 @@ function M.show(completion, bufnr)
     hl_mode = "combine",
     priority = 1000,
   }
-  
+
   -- Add virtual lines for remaining lines
   if #lines > 1 then
     extmark_opts.virt_lines = {}
@@ -135,9 +135,10 @@ function M.show(completion, bufnr)
       })
     end
   end
-  
+
   -- Set the extmark
-  local ok, result = pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, target_row, cursor_col, extmark_opts)
+  local ok, result =
+    pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, target_row, cursor_col, extmark_opts)
   if ok then
     M.extmark_id = result
     M.current = completion
@@ -153,16 +154,16 @@ function M.accept()
   if not M.current then
     return false
   end
-  
+
   local completion = M.current
   local bufnr = completion.bufnr or vim.api.nvim_get_current_buf()
-  
+
   -- Validate buffer
   if not vim.api.nvim_buf_is_valid(bufnr) then
     M.dismiss()
     return false
   end
-  
+
   -- Build the text edit
   local full_text = completion.full_text or completion.text
   local range = {
@@ -175,61 +176,62 @@ function M.accept()
       character = completion.range_end.col,
     },
   }
-  
+
   -- Clamp range to valid buffer bounds
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   range.start.line = math.min(range.start.line, line_count - 1)
   range["end"].line = math.min(range["end"].line, line_count - 1)
-  
+
   -- Clamp end character to line length
-  local end_line_content = vim.api.nvim_buf_get_lines(bufnr, range["end"].line, range["end"].line + 1, false)[1] or ""
+  local end_line_content = vim.api.nvim_buf_get_lines(
+    bufnr,
+    range["end"].line,
+    range["end"].line + 1,
+    false
+  )[1] or ""
   range["end"].character = math.min(range["end"].character, #end_line_content)
-  
+
   -- Clear ghost first
   M.dismiss()
-  
+
   -- Schedule the edit to run outside of any restricted context
   vim.schedule(function()
     -- Create undo breakpoint
     vim.cmd("let &undolevels=&undolevels")
-    
+
     -- Apply the edit using LSP utility
     local ok, err = pcall(function()
-      vim.lsp.util.apply_text_edits(
-        { { range = range, newText = full_text } },
-        bufnr,
-        "utf-8"
-      )
+      vim.lsp.util.apply_text_edits({ { range = range, newText = full_text } }, bufnr, "utf-8")
     end)
-    
+
     if not ok then
       vim.notify("[AmpTab] Failed to apply: " .. tostring(err), vim.log.levels.ERROR)
       return
     end
-    
+
     -- Calculate new cursor position (end of inserted text)
     local new_lines = vim.split(full_text, "\n", { plain = true })
     local new_line_count = #new_lines
     local last_line_len = #new_lines[new_line_count]
-    
+
     local new_cursor_row = range.start.line + new_line_count -- 1-indexed
     local new_cursor_col = last_line_len
-    
+
     -- If single line, add to start column
     if new_line_count == 1 then
       new_cursor_col = range.start.character + last_line_len
     end
-    
+
     -- Clamp to valid range
     local final_line_count = vim.api.nvim_buf_line_count(bufnr)
     if new_cursor_row > final_line_count then
       new_cursor_row = final_line_count
     end
-    
+
     -- Set cursor position
     pcall(vim.api.nvim_win_set_cursor, 0, { new_cursor_row, new_cursor_col })
   end)
-  
+
   return true
 end
 
@@ -239,32 +241,32 @@ function M.accept_line()
   if not M.current then
     return false
   end
-  
+
   local completion = M.current
   local bufnr = completion.bufnr or vim.api.nvim_get_current_buf()
-  
+
   local full_text = completion.full_text or completion.text
   local lines = vim.split(full_text, "\n", { plain = true })
-  
+
   if #lines == 0 then
     M.dismiss()
     return false
   end
-  
+
   -- Only apply first line
   local first_line = lines[1]
-  
+
   -- Insert at cursor position
   local cursor = vim.api.nvim_win_get_cursor(0)
   local row = cursor[1] - 1
   local col = cursor[2]
-  
+
   local current_line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
   local new_line = current_line:sub(1, col) .. first_line .. current_line:sub(col + 1)
-  
+
   vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false, { new_line })
   vim.api.nvim_win_set_cursor(0, { row + 1, col + #first_line })
-  
+
   -- If there are more lines, update completion and re-show
   if #lines > 1 then
     local remaining = table.concat(lines, "\n", 2)
@@ -275,7 +277,7 @@ function M.accept_line()
     M.show(completion, bufnr)
     return true
   end
-  
+
   M.dismiss()
   return true
 end
@@ -286,30 +288,30 @@ function M.accept_word()
   if not M.current then
     return false
   end
-  
+
   local completion = M.current
   local bufnr = completion.bufnr or vim.api.nvim_get_current_buf()
-  
+
   local display_text = completion.text or ""
   if display_text == "" then
     M.dismiss()
     return false
   end
-  
+
   -- Extract first word (including trailing space)
   local word = display_text:match("^(%S+%s*)") or display_text:sub(1, 1)
-  
+
   -- Insert at cursor position
   local cursor = vim.api.nvim_win_get_cursor(0)
   local row = cursor[1] - 1
   local col = cursor[2]
-  
+
   local current_line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
   local new_line = current_line:sub(1, col) .. word .. current_line:sub(col + 1)
-  
+
   vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false, { new_line })
   vim.api.nvim_win_set_cursor(0, { row + 1, col + #word })
-  
+
   -- If there's more text, update completion and re-show
   local remaining = display_text:sub(#word + 1)
   if remaining ~= "" then
@@ -319,7 +321,7 @@ function M.accept_word()
     M.show(completion, bufnr)
     return true
   end
-  
+
   M.dismiss()
   return true
 end

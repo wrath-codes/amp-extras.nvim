@@ -1,5 +1,8 @@
 local M = {}
 
+local ts_context = require("amp_extras.amptab.treesitter")
+local enrichment = require("amp_extras.amptab.enrichment")
+
 -- Special tokens for FIM prompt
 M.tokens = {
   editable_region_start = "<|editable_region_start|>",
@@ -13,6 +16,12 @@ M.defaults = {
   suffix_tokens = 1500,
   code_to_rewrite_prefix_tokens = 100,
   code_to_rewrite_suffix_tokens = 900,
+  -- Treesitter options
+  use_treesitter = true,
+  treesitter_max_lines = 100,
+  prefer_function = true,
+  -- Enrichment options
+  use_enrichment = true,
 }
 
 ---Approximate token count (rough: 4 chars per token)
@@ -49,8 +58,15 @@ end
 ---@class AmpTabContext
 ---@field prompt string The FIM prompt to send
 ---@field code_to_rewrite string The code in the editable region (for prediction)
+---@field prefix_in_region string Text before cursor within editable region
+---@field suffix_in_region string Text after cursor within editable region
 ---@field range_start {row: number, col: number} 0-indexed start of editable region
 ---@field range_end {row: number, col: number} 0-indexed end of editable region
+---@field cursor_row number 0-indexed cursor row
+---@field cursor_col number 0-indexed cursor column
+---@field diagnostic_hint string|nil Diagnostic message at cursor
+---@field ts_strategy string|nil Treesitter strategy used: "function"|"block"|"fallback"|nil
+---@field ts_node_type string|nil Treesitter node type used for region
 
 ---Get diagnostic at cursor position
 ---@param bufnr number
@@ -84,12 +100,27 @@ function M.build(bufnr, opts)
   local total_lines = #lines
 
   -- Calculate editable region bounds
-  -- We want ~400 tokens around cursor (40 prefix + 360 suffix in lines)
-  local rewrite_prefix_lines = math.ceil(opts.code_to_rewrite_prefix_tokens / 10)
-  local rewrite_suffix_lines = math.ceil(opts.code_to_rewrite_suffix_tokens / 10)
+  local region_start_row, region_end_row
+  local ts_region = nil
+  local ts_strategy = nil
 
-  local region_start_row = math.max(0, cursor_row - rewrite_prefix_lines)
-  local region_end_row = math.min(total_lines - 1, cursor_row + rewrite_suffix_lines)
+  -- Try treesitter-aware region selection
+  if opts.use_treesitter and ts_context.is_available(bufnr) then
+    ts_region = ts_context.get_editable_region(bufnr, cursor_row, cursor_col, {
+      max_lines = opts.treesitter_max_lines,
+      prefer_function = opts.prefer_function,
+    })
+    region_start_row = ts_region.start_row
+    region_end_row = ts_region.end_row
+    ts_strategy = ts_region.strategy
+  else
+    -- Fallback: fixed line counts (40 prefix + 360 suffix in lines)
+    local rewrite_prefix_lines = math.ceil(opts.code_to_rewrite_prefix_tokens / 10)
+    local rewrite_suffix_lines = math.ceil(opts.code_to_rewrite_suffix_tokens / 10)
+
+    region_start_row = math.max(0, cursor_row - rewrite_prefix_lines)
+    region_end_row = math.min(total_lines - 1, cursor_row + rewrite_suffix_lines)
+  end
 
   -- Build the different sections
   local prefix_lines = {}
@@ -134,30 +165,82 @@ function M.build(bufnr, opts)
 
   -- Check for diagnostic at cursor to include as hint
   local diagnostic_hint = opts.diagnostic_hint or get_diagnostic_at_cursor(bufnr, cursor_row)
-  
-  -- Build FIM prompt
-  -- If there's a diagnostic, add it as a comment hint before the editable region
-  local diagnostic_comment = ""
-  if diagnostic_hint then
-    -- Format as a comment based on file type
-    local ft = vim.bo[bufnr].filetype
-    local comment_prefix = "# "  -- Default to Python/shell style
-    if ft == "lua" then
-      comment_prefix = "-- "
-    elseif ft == "javascript" or ft == "typescript" or ft == "rust" or ft == "go" or ft == "c" or ft == "cpp" or ft == "java" then
-      comment_prefix = "// "
-    end
-    diagnostic_comment = "\n" .. comment_prefix .. "FIX: " .. diagnostic_hint:gsub("\n", " ") .. "\n"
+
+  -- Gather enrichment context (recent edits, viewed files, clipboard, lint errors)
+  local enriched = nil
+  if opts.use_enrichment then
+    enriched = enrichment.get_all(bufnr, {
+      range_start = region_start_row,
+      range_end = region_end_row,
+    })
   end
-  
-  local prompt = prefix_before
-    .. diagnostic_comment
-    .. "\n" .. M.tokens.editable_region_start .. "\n"
-    .. code_to_rewrite_prefix
-    .. M.tokens.user_cursor
-    .. code_to_rewrite_suffix
-    .. "\n" .. M.tokens.editable_region_end .. "\n"
-    .. suffix_after
+
+  -- Build FIM prompt matching official Amp extension format
+  local prompt_parts = {}
+
+  -- 1. Recently viewed snippets (before file)
+  if enriched and enriched.recently_viewed then
+    table.insert(
+      prompt_parts,
+      "Code snippets I have recently viewed, roughly from oldest to newest. Some may be irrelevant to the change:"
+    )
+    table.insert(prompt_parts, enriched.recently_viewed)
+    table.insert(prompt_parts, "")
+  end
+
+  -- 2. Diff history (recent edits)
+  if enriched and enriched.diff_history then
+    table.insert(prompt_parts, "My recent edits, from oldest to newest:")
+    table.insert(prompt_parts, enriched.diff_history)
+    table.insert(prompt_parts, "")
+  end
+
+  -- 3. Lint errors
+  if enriched and enriched.lint_errors then
+    table.insert(prompt_parts, "Linter errors from the code that you will rewrite:")
+    table.insert(prompt_parts, enriched.lint_errors)
+    table.insert(prompt_parts, "")
+  elseif diagnostic_hint then
+    table.insert(prompt_parts, "Linter errors from the code that you will rewrite:")
+    table.insert(prompt_parts, string.format("<lint_errors>\n%s\n</lint_errors>", diagnostic_hint))
+    table.insert(prompt_parts, "")
+  end
+
+  -- 4. Recent copy (clipboard)
+  if enriched and enriched.recent_copy then
+    table.insert(prompt_parts, "Recently copied text. It may be irrelevant to the change:")
+    table.insert(prompt_parts, enriched.recent_copy)
+    table.insert(prompt_parts, "")
+  end
+
+  -- 5. The file currently open
+  table.insert(prompt_parts, "The file currently open:")
+  table.insert(prompt_parts, "<file>")
+
+  -- 5a. Prefix before editable region
+  table.insert(prompt_parts, prefix_before)
+
+  -- 5b. Class context (header + __init__) if available - as inline comment
+  local class_context = ts_region and ts_region.class_context or nil
+  if class_context then
+    table.insert(prompt_parts, "# CLASS CONTEXT (available self.* attributes):")
+    table.insert(prompt_parts, class_context)
+    table.insert(prompt_parts, "# END CLASS CONTEXT")
+  end
+
+  -- 5c. The editable region with cursor marker
+  table.insert(prompt_parts, M.tokens.editable_region_start)
+  table.insert(
+    prompt_parts,
+    code_to_rewrite_prefix .. M.tokens.user_cursor .. code_to_rewrite_suffix
+  )
+  table.insert(prompt_parts, M.tokens.editable_region_end)
+
+  -- 5d. Suffix after editable region
+  table.insert(prompt_parts, suffix_after)
+  table.insert(prompt_parts, "</file>")
+
+  local prompt = table.concat(prompt_parts, "\n")
 
   return {
     prompt = prompt,
@@ -171,6 +254,9 @@ function M.build(bufnr, opts)
     cursor_row = cursor_row,
     cursor_col = cursor_col,
     diagnostic_hint = diagnostic_hint,
+    -- Treesitter metadata (for debugging/logging)
+    ts_strategy = ts_strategy,
+    ts_node_type = ts_region and ts_region.node_type or nil,
   }
 end
 

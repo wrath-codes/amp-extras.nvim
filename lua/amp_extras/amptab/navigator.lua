@@ -54,13 +54,13 @@ end
 ---@param item CachedCompletion
 function M.show_preview(item)
   M.clear_preview()
-  
+
   local bufnr = vim.api.nvim_get_current_buf()
-  
+
   if item.bufnr ~= bufnr then
     return
   end
-  
+
   -- Show using ghost module
   ghost.show(item, bufnr)
   M.previewing = item
@@ -71,13 +71,12 @@ end
 ---@return table[] diagnostics
 local function get_sorted_diagnostics(bufnr)
   local diagnostics = vim.diagnostic.get(bufnr)
-  
+
   -- Filter to errors and warnings only
   diagnostics = vim.tbl_filter(function(d)
-    return d.severity == vim.diagnostic.severity.ERROR 
-        or d.severity == vim.diagnostic.severity.WARN
+    return d.severity == vim.diagnostic.severity.ERROR or d.severity == vim.diagnostic.severity.WARN
   end, diagnostics)
-  
+
   -- Sort by line number
   table.sort(diagnostics, function(a, b)
     if a.lnum ~= b.lnum then
@@ -85,7 +84,7 @@ local function get_sorted_diagnostics(bufnr)
     end
     return a.col < b.col
   end)
-  
+
   return diagnostics
 end
 
@@ -95,9 +94,9 @@ function M.next()
   local bufnr = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local cursor_row = cursor[1] - 1 -- 0-indexed
-  
+
   local diagnostics = get_sorted_diagnostics(bufnr)
-  
+
   -- Find first diagnostic after cursor (skip recently visited)
   local target = nil
   local skipped = 0
@@ -111,7 +110,7 @@ function M.next()
       end
     end
   end
-  
+
   -- Wrap around to first unvisited diagnostic if none found below
   if not target then
     for _, d in ipairs(diagnostics) do
@@ -124,34 +123,34 @@ function M.next()
       end
     end
   end
-  
+
   -- If all visited, clear history and try again
   if not target and #diagnostics > 0 then
     M.clear_visited()
     target = diagnostics[1]
     vim.notify("[AmpTab] All diagnostics visited, starting over", vim.log.levels.INFO)
   end
-  
+
   if not target then
     vim.notify("[AmpTab] No diagnostics found", vim.log.levels.INFO)
     return false
   end
-  
+
   -- Mark as visited
   mark_visited(target.lnum, bufnr)
-  
+
   -- Move cursor to diagnostic
   vim.api.nvim_win_set_cursor(0, { target.lnum + 1, target.col })
-  
+
   -- Show diagnostic message briefly
   vim.notify(string.format("[AmpTab] %s", target.message:sub(1, 80)), vim.log.levels.INFO)
-  
+
   -- Trigger fresh completion at this location
   vim.schedule(function()
     local amptab = require("amp_extras.amptab")
     amptab.trigger()
   end)
-  
+
   return true
 end
 
@@ -161,9 +160,9 @@ function M.prev()
   local bufnr = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local cursor_row = cursor[1] - 1 -- 0-indexed
-  
+
   local diagnostics = get_sorted_diagnostics(bufnr)
-  
+
   -- Find last diagnostic before cursor (skip recently visited)
   local target = nil
   local skipped = 0
@@ -178,7 +177,7 @@ function M.prev()
       end
     end
   end
-  
+
   -- Wrap around to last unvisited diagnostic if none found above
   if not target then
     for i = #diagnostics, 1, -1 do
@@ -192,34 +191,34 @@ function M.prev()
       end
     end
   end
-  
+
   -- If all visited, clear history and try again
   if not target and #diagnostics > 0 then
     M.clear_visited()
     target = diagnostics[#diagnostics]
     vim.notify("[AmpTab] All diagnostics visited, starting over", vim.log.levels.INFO)
   end
-  
+
   if not target then
     vim.notify("[AmpTab] No diagnostics found", vim.log.levels.INFO)
     return false
   end
-  
+
   -- Mark as visited
   mark_visited(target.lnum, bufnr)
-  
+
   -- Move cursor to diagnostic
   vim.api.nvim_win_set_cursor(0, { target.lnum + 1, target.col })
-  
+
   -- Show diagnostic message briefly
   vim.notify(string.format("[AmpTab] %s", target.message:sub(1, 80)), vim.log.levels.INFO)
-  
+
   -- Trigger fresh completion at this location
   vim.schedule(function()
     local amptab = require("amp_extras.amptab")
     amptab.trigger()
   end)
-  
+
   return true
 end
 
@@ -230,23 +229,23 @@ function M.accept()
     -- Try ghost module directly
     return ghost.accept()
   end
-  
+
   local item = M.previewing
   local bufnr = vim.api.nvim_get_current_buf()
-  
+
   if item.bufnr ~= bufnr then
     vim.notify("[AmpTab] Completion is for a different buffer", vim.log.levels.WARN)
     return false
   end
-  
+
   -- Use ghost.accept() which handles the edit properly
   local success = ghost.accept()
-  
+
   if success then
     -- Remove from cache
     cache.remove(item.id)
     M.previewing = nil
-    
+
     -- Check for next completion and show it
     local next_item = cache.get_next()
     if next_item then
@@ -255,7 +254,7 @@ function M.accept()
       end)
     end
   end
-  
+
   return success
 end
 
@@ -270,11 +269,8 @@ end
 ---Show status of cached completions
 function M.status()
   local status = cache.status()
-  local msg = string.format(
-    "[AmpTab] Cache: %d items (%d in buffer)",
-    status.total,
-    status.current_buffer
-  )
+  local msg =
+    string.format("[AmpTab] Cache: %d items (%d in buffer)", status.total, status.current_buffer)
   vim.notify(msg, vim.log.levels.INFO)
 end
 

@@ -38,7 +38,7 @@ end
 ---@return string id The cache ID
 function M.add(completion, source)
   local id = generate_id()
-  
+
   local item = {
     id = id,
     text = completion.text,
@@ -51,7 +51,7 @@ function M.add(completion, source)
     timestamp = vim.loop.now(),
     source = source or "cursor",
   }
-  
+
   -- Remove old items from same buffer/position (dedup)
   M.items = vim.tbl_filter(function(existing)
     if existing.bufnr ~= item.bufnr then
@@ -61,17 +61,17 @@ function M.add(completion, source)
     local line_diff = math.abs(existing.cursor_row - item.cursor_row)
     return line_diff > 5
   end, M.items)
-  
+
   table.insert(M.items, item)
-  
+
   -- Trim cache if too large
   while #M.items > M.max_items do
     table.remove(M.items, 1)
   end
-  
+
   M.current_id = id
   M.current_index = #M.items
-  
+
   return id
 end
 
@@ -93,18 +93,18 @@ function M.get_for_current_buffer()
   local bufnr = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local cursor_row = cursor[1] - 1
-  
+
   local items = vim.tbl_filter(function(item)
     return item.bufnr == bufnr
   end, M.items)
-  
+
   -- Sort by distance from cursor
   table.sort(items, function(a, b)
     local dist_a = math.abs(a.cursor_row - cursor_row)
     local dist_b = math.abs(b.cursor_row - cursor_row)
     return dist_a < dist_b
   end)
-  
+
   return items
 end
 
@@ -114,7 +114,7 @@ function M.get_next()
   local bufnr = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local cursor_row = cursor[1] - 1
-  
+
   -- Find completions after cursor, sorted by distance
   local candidates = {}
   for i, item in ipairs(M.items) do
@@ -122,16 +122,16 @@ function M.get_next()
       table.insert(candidates, { item = item, index = i })
     end
   end
-  
+
   if #candidates == 0 then
     return nil, nil
   end
-  
+
   -- Sort by row (closest first)
   table.sort(candidates, function(a, b)
     return a.item.cursor_row < b.item.cursor_row
   end)
-  
+
   return candidates[1].item, candidates[1].index
 end
 
@@ -141,7 +141,7 @@ function M.get_prev()
   local bufnr = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local cursor_row = cursor[1] - 1
-  
+
   -- Find completions before cursor, sorted by distance
   local candidates = {}
   for i, item in ipairs(M.items) do
@@ -149,16 +149,16 @@ function M.get_prev()
       table.insert(candidates, { item = item, index = i })
     end
   end
-  
+
   if #candidates == 0 then
     return nil, nil
   end
-  
+
   -- Sort by row (closest first, descending)
   table.sort(candidates, function(a, b)
     return a.item.cursor_row > b.item.cursor_row
   end)
-  
+
   return candidates[1].item, candidates[1].index
 end
 
@@ -168,7 +168,7 @@ function M.remove(id)
   M.items = vim.tbl_filter(function(item)
     return item.id ~= id
   end, M.items)
-  
+
   if M.current_id == id then
     M.current_id = nil
     M.current_index = nil
@@ -200,7 +200,7 @@ function M.status()
   local buffer_items = vim.tbl_filter(function(item)
     return item.bufnr == bufnr
   end, M.items)
-  
+
   return {
     total = #M.items,
     current_buffer = #buffer_items,
