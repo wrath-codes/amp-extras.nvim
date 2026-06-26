@@ -1,11 +1,10 @@
 -- Command registry for amp-extras
 local M = {}
 
--- Load UI commands
-M.ui = {
-  send_message_box = require("amp_extras.commands.ui").send_message,
-  login = require("amp_extras.commands.ui").login,
-}
+-- NOTE: UI commands (login, send message box) pull in nui.nvim /
+-- nui-components.nvim. Those are required lazily inside the command callbacks
+-- so that registration never fails if nui happens to load after amp-extras.
+-- A failure here would abort setup() and break send/message/lualine together.
 
 -- Load send commands
 local send = require("amp_extras.commands.send")
@@ -16,7 +15,7 @@ local update = require("amp_extras.commands.update")
 function M.register_commands()
   -- UI Commands
   vim.api.nvim_create_user_command("AmpLogin", function()
-    M.ui.login.command()
+    require("amp_extras.commands.ui.login").command()
   end, {
     desc = "Amp: Log in to Amp",
   })
@@ -34,7 +33,7 @@ function M.register_commands()
   })
 
   vim.api.nvim_create_user_command("AmpSendMessage", function()
-    M.ui.send_message_box.command()
+    require("amp_extras.commands.ui.send_message_box").command()
   end, {
     desc = "Amp: Open send message UI",
   })
