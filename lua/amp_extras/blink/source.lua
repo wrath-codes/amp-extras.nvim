@@ -93,11 +93,11 @@ function M:get_completions(context, callback)
     end
   end
 
-  callback {
+  callback({
     is_incomplete_forward = false,
     is_incomplete_backward = false,
     items = items,
-  }
+  })
 end
 
 function M.new()
